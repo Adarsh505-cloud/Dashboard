@@ -1,3 +1,23 @@
+// Add this interface at the top of the file
+export interface ResourceDetail {
+  id: string;
+  name: string;
+  type: string;
+  region: string;
+  owner: string;
+  project: string;
+  createdDate: string;
+  status: 'running' | 'stopped' | 'pending' | 'terminated' | 'unknown';
+  cost: number;
+  tags: Array<{ key: string; value: string }>;
+  specifications?: {
+    instanceType?: string;
+    storage?: string;
+    memory?: string;
+    cpu?: string;
+  };
+}
+
 const API_BASE_URL = '';
 
 export interface ApiCredentials {
@@ -70,6 +90,12 @@ class ApiService {
 
   async getComprehensiveAnalysis(credentials: ApiCredentials) {
     return this.makeRequest('/api/cost/analysis', credentials);
+  }
+
+  async getResourcesForService(credentials: ApiCredentials, serviceName: string) {
+    const body = { ...credentials, serviceName };
+    // Tell the function to expect an array of ResourceDetail objects
+    return this.makeRequest<ResourceDetail[]>('/api/cost/resources', body);
   }
 
   async getServiceCosts(credentials: ApiCredentials) {

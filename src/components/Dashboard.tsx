@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { 
-  ArrowLeft, 
-  Download, 
-  Calendar, 
-  DollarSign, 
-  TrendingUp, 
-  Users, 
-  Server, 
+import {
+  ArrowLeft,
+  Download,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  Users,
+  Server,
   FolderOpen,
   AlertTriangle,
   RefreshCw,
@@ -14,10 +14,8 @@ import {
   AlertCircle,
   XCircle,
   Loader,
-  Globe,
   Activity,
-  BarChart3,
-  Zap
+  BarChart3
 } from 'lucide-react';
 import CostChart from './CostChart';
 import UserCostChart from './UserCostChart';

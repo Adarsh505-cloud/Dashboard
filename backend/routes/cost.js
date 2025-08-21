@@ -1,5 +1,5 @@
 import express from 'express';
-import { validateCredentials } from '../middleware/validation.js';
+import { validateCredentials, validateResourceRequest } from '../middleware/validation.js';
 import { CostService } from '../services/costService.js';
 import { RecommendationService } from '../services/recommendationService.js';
 
@@ -13,7 +13,7 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
     const costService = new CostService(accountId, roleArn);
     const recommendationService = new RecommendationService(accountId, roleArn);
     
-    // Fetch all cost data in parallel
+    // Fetch all cost data in parallel (re-add getTotalMonthlyCost)
     const [
       totalCost,
       serviceCosts,
@@ -26,7 +26,7 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
       dailyCostData,
       weeklyCostData
     ] = await Promise.all([
-      costService.getTotalMonthlyCost(),
+      costService.getTotalMonthlyCost(), // Re-add this line
       costService.getServiceCosts(),
       costService.getRegionCosts(),
       costService.getUserCosts(),
@@ -41,7 +41,7 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        totalMonthlyCost: totalCost,
+        totalMonthlyCost: totalCost, // Use the value from the direct call
         serviceCosts,
         regionCosts,
         userCosts,
@@ -49,8 +49,8 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
         projectCosts,
         recommendations,
         costTrendData,
-        dailyCostData, // Real daily cost data from AWS
-        weeklyCostData // Real weekly cost data from AWS
+        dailyCostData,
+        weeklyCostData
       },
       timestamp: new Date().toISOString()
     });
@@ -184,5 +184,24 @@ router.post('/weekly', validateCredentials, async (req, res, next) => {
     next(error);
   }
 });
+
+// Get detailed resources for a specific service
+router.post('/resources', validateResourceRequest, async (req, res, next) => {
+  try {
+    const { accountId, roleArn, serviceName } = req.body;
+    const costService = new CostService(accountId, roleArn);
+    
+    const resources = await costService.getResourcesForService(serviceName);
+    
+    res.json({
+      success: true,
+      data: resources,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 
 export default router;

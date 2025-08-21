@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  Server, 
-  User, 
-  Calendar, 
-  Tag, 
-  MapPin, 
+import {
+  ArrowLeft,
+  Server,
+  User,
+  Calendar,
+  Tag,
+  MapPin,
   DollarSign,
   Activity,
   Search,
-  Filter,
   Download,
   RefreshCw,
   AlertCircle,
@@ -19,10 +18,7 @@ import {
   HardDrive,
   Cpu,
   MemoryStick,
-  Loader,
-  TrendingUp,
-  TrendingDown,
-  Minus
+  Loader
 } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -47,6 +43,7 @@ interface ResourceDetail {
 
 interface ServiceResourceDetailsProps {
   serviceName: string;
+  serviceCost: number;
   credentials: {
     accountId: string;
     roleArn: string;
@@ -55,7 +52,8 @@ interface ServiceResourceDetailsProps {
 }
 
 const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ 
-  serviceName, 
+  serviceName,
+  serviceCost,
   credentials, 
   onBack 
 }) => {
@@ -71,19 +69,15 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
     const loadResources = async () => {
       setLoading(true);
       setError(null);
-      
+  
       try {
-        console.log(`🔍 Fetching resources for service: ${serviceName}`);
-        
-        // Get comprehensive analysis to extract service-specific data
-        const analysisData = await apiService.getComprehensiveAnalysis(credentials);
-        
-        // Extract resources for this specific service from actual AWS data
-        const serviceResources = await extractServiceResources(serviceName, analysisData, credentials);
-        
-        console.log(`📊 Found ${serviceResources.length} resources for ${serviceName}`);
-        setResources(serviceResources);
-        
+        console.log(`🔍 Fetching REAL resources for service: ${serviceName}`);
+  
+        const realResources = await apiService.getResourcesForService(credentials, serviceName);
+  
+        console.log(`📊 Found ${realResources.length} REAL resources for ${serviceName}`);
+        setResources(realResources as ResourceDetail[]); // Cast the response
+  
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load resources';
         console.error('❌ Error loading service resources:', errorMessage);
@@ -92,198 +86,9 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
         setLoading(false);
       }
     };
-
+  
     loadResources();
   }, [serviceName, credentials]);
-
-  const extractServiceResources = async (service: string, analysisData: any, creds: any): Promise<ResourceDetail[]> => {
-    const resources: ResourceDetail[] = [];
-    
-    try {
-      // Get all data from the analysis
-      const allUserCosts = analysisData.userCosts || [];
-      const allProjectCosts = analysisData.projectCosts || [];
-      const serviceCosts = analysisData.serviceCosts || [];
-      const resourceCosts = analysisData.resourceCosts || [];
-      
-      // Find the specific service in serviceCosts
-      const serviceData = serviceCosts.find((s: any) => s.service === service);
-      if (!serviceData) {
-        console.log(`⚠️ No cost data found for service: ${service}`);
-        return [];
-      }
-
-      // Find matching resource type in resourceCosts
-      const resourceData = resourceCosts.find((r: any) => 
-        r.type === service || 
-        r.type.includes(service.replace('Amazon ', '')) ||
-        service.includes(r.type.replace('Amazon ', ''))
-      );
-
-      if (!resourceData || resourceData.count === 0) {
-        console.log(`⚠️ No resource data found for service: ${service}`);
-        return [];
-      }
-
-      console.log(`📋 Found resource data:`, {
-        service,
-        resourceType: resourceData.type,
-        count: resourceData.count,
-        cost: resourceData.cost
-      });
-
-      // Generate realistic resources based on actual data
-      const resourceCount = Math.min(resourceData.count, 20); // Limit to 20 for UI performance
-      const totalServiceCost = serviceData.cost;
-      
-      for (let i = 0; i < resourceCount; i++) {
-        // Distribute users and projects realistically
-        const randomUser = allUserCosts.length > 0 
-          ? allUserCosts[Math.floor(Math.random() * allUserCosts.length)]
-          : { user: 'unknown' };
-        const randomProject = allProjectCosts.length > 0 
-          ? allProjectCosts[Math.floor(Math.random() * allProjectCosts.length)]
-          : { project: 'unassigned' };
-        
-        const resourceId = generateResourceId(service, i);
-        const resourceName = generateResourceName(service, i);
-        const status = generateResourceStatus();
-        const cost = generateResourceCost(totalServiceCost, resourceCount, status, i);
-        
-        const resource: ResourceDetail = {
-          id: resourceId,
-          name: resourceName,
-          type: service,
-          region: serviceData.region || 'us-east-1',
-          owner: randomUser.user || 'unknown',
-          project: randomProject.project || 'unassigned',
-          createdDate: generateCreatedDate(),
-          status,
-          cost,
-          tags: generateTags(randomUser.user, randomProject.project),
-          specifications: generateSpecifications(service)
-        };
-
-        resources.push(resource);
-      }
-
-      // Sort by cost descending
-      return resources.sort((a, b) => b.cost - a.cost);
-      
-    } catch (error) {
-      console.error('Error extracting service resources:', error);
-      return [];
-    }
-  };
-
-  const generateResourceId = (service: string, index: number): string => {
-    const servicePrefix = getServicePrefix(service);
-    const randomSuffix = Math.random().toString(36).substr(2, 9);
-    return `${servicePrefix}-${randomSuffix}`;
-  };
-
-  const getServicePrefix = (service: string): string => {
-    if (service.includes('EC2') || service.includes('Compute')) return 'i';
-    if (service.includes('RDS') || service.includes('Database')) return 'db';
-    if (service.includes('S3') || service.includes('Storage')) return 'bucket';
-    if (service.includes('Lambda') || service.includes('Function')) return 'lambda';
-    if (service.includes('ELB') || service.includes('Load Balancer')) return 'elb';
-    if (service.includes('VPC')) return 'vpc';
-    if (service.includes('CloudWatch')) return 'alarm';
-    if (service.includes('DynamoDB')) return 'table';
-    return 'resource';
-  };
-
-  const generateResourceName = (service: string, index: number): string => {
-    const serviceType = service.replace('Amazon ', '').replace(' Service', '').toLowerCase().replace(/\s+/g, '-');
-    const environments = ['prod', 'dev', 'staging', 'test'];
-    const env = environments[Math.floor(Math.random() * environments.length)];
-    return `${serviceType}-${env}-${String(index + 1).padStart(2, '0')}`;
-  };
-
-  const generateResourceStatus = (): 'running' | 'stopped' | 'pending' | 'terminated' => {
-    const statuses: Array<'running' | 'stopped' | 'pending'> = ['running', 'stopped', 'pending'];
-    const weights = [0.75, 0.15, 0.1]; // 75% running, 15% stopped, 10% pending
-    
-    const random = Math.random();
-    let cumulative = 0;
-    
-    for (let i = 0; i < weights.length; i++) {
-      cumulative += weights[i];
-      if (random <= cumulative) {
-        return statuses[i];
-      }
-    }
-    
-    return 'running';
-  };
-
-  const generateResourceCost = (totalServiceCost: number, resourceCount: number, status: string, index: number): number => {
-    // Use Pareto distribution - some resources cost much more than others
-    const paretoFactor = Math.pow(Math.random(), 2); // Skew towards lower costs
-    const baseCost = (totalServiceCost / resourceCount) * (2 - paretoFactor);
-    
-    // Add some variation based on index (first few resources tend to be more expensive)
-    const indexFactor = 1 + (0.5 * Math.exp(-index / 3));
-    let cost = baseCost * indexFactor;
-    
-    // Adjust based on status
-    if (status === 'stopped') cost *= 0.1; // Stopped resources cost much less
-    if (status === 'pending') cost *= 0.5; // Pending resources cost half
-    
-    return Math.max(1, Math.round(cost * 100) / 100);
-  };
-
-  const generateCreatedDate = (): string => {
-    const now = new Date();
-    const daysAgo = Math.floor(Math.random() * 365); // Up to 1 year ago
-    const createdDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    return createdDate.toISOString();
-  };
-
-  const generateTags = (owner?: string, project?: string): Array<{ key: string; value: string }> => {
-    const tags = [
-      { key: 'Environment', value: Math.random() > 0.5 ? 'Production' : 'Development' },
-      { key: 'CostCenter', value: `CC-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}` }
-    ];
-    
-    if (owner && owner !== 'unknown') {
-      tags.push({ key: 'Owner', value: owner });
-    }
-    
-    if (project && project !== 'unassigned') {
-      tags.push({ key: 'Project', value: project });
-    }
-    
-    return tags;
-  };
-
-  const generateSpecifications = (service: string) => {
-    if (service.includes('EC2') || service.includes('Compute')) {
-      const instanceTypes = ['t3.micro', 't3.small', 't3.medium', 't3.large', 'm5.large', 'm5.xlarge', 'c5.large'];
-      return {
-        instanceType: instanceTypes[Math.floor(Math.random() * instanceTypes.length)],
-        storage: `${Math.floor(Math.random() * 500) + 20}GB`,
-        memory: `${Math.floor(Math.random() * 16) + 1}GB`,
-        cpu: `${Math.floor(Math.random() * 8) + 1} vCPU`
-      };
-    }
-    if (service.includes('RDS') || service.includes('Database')) {
-      const dbTypes = ['db.t3.micro', 'db.t3.small', 'db.r5.large', 'db.r5.xlarge', 'db.m5.large'];
-      return {
-        instanceType: dbTypes[Math.floor(Math.random() * dbTypes.length)],
-        storage: `${Math.floor(Math.random() * 1000) + 100}GB`,
-        memory: `${Math.floor(Math.random() * 32) + 2}GB`
-      };
-    }
-    if (service.includes('S3') || service.includes('Storage')) {
-      return {
-        storage: `${Math.floor(Math.random() * 10000) + 100}GB`,
-        storageClass: Math.random() > 0.5 ? 'Standard' : 'Standard-IA'
-      };
-    }
-    return undefined;
-  };
 
   // Filter and sort resources
   const filteredResources = resources
@@ -343,7 +148,6 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
     return <Server className="w-6 h-6" />;
   };
 
-  const totalCost = filteredResources.reduce((sum, resource) => sum + resource.cost, 0);
   const uniqueRegions = [...new Set(resources.map(r => r.region))];
   const runningResources = resources.filter(r => r.status === 'running').length;
 
@@ -521,9 +325,13 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
             <DollarSign className="w-6 h-6" />
             <span className="font-medium">Total Cost</span>
           </div>
-          <div className="text-3xl font-bold">${totalCost.toLocaleString()}</div>
+          {/* Use the new serviceCost prop and format it */}
+          <div className="text-3xl font-bold">
+            ${serviceCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
           <div className="text-orange-100 text-sm">
-            ${(totalCost / filteredResources.length).toFixed(0)} avg
+            {/* Fix the average calculation */}
+            ${(filteredResources.length > 0 ? serviceCost / filteredResources.length : 0).toFixed(2)} avg
           </div>
         </div>
       </div>
@@ -618,19 +426,22 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
                     </div>
                   </div>
                 </div>
-
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-gray-900 mb-1">
-                    ${resource.cost.toLocaleString()}
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
+                  {/* Conditionally render cost only if it's greater than 0 */}
+                  {resource.cost > 0 && (
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      ${resource.cost.toLocaleString()}
+                      <span className="text-sm text-gray-500 font-normal ml-1">/ monthly</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-end gap-2 mt-2">
                     {getStatusIcon(resource.status)}
                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(resource.status)}`}>
                       {resource.status.toUpperCase()}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500">monthly cost</div>
                 </div>
+                
               </div>
 
               {/* Specifications */}
