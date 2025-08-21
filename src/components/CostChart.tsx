@@ -6,12 +6,11 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { 
-  ChevronRight, 
-  ChevronDown, 
-  Server, 
-  MapPin, 
-  DollarSign,
+import {
+  ChevronRight,
+  ChevronDown,
+  Server,
+  MapPin,
   TrendingUp,
   Eye,
   Filter,
@@ -160,9 +159,14 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials }) => {
   };
 
   if (selectedService) {
+    // Find the cost data for the service that was clicked
+    const serviceData = groupedServices.find(s => s.service === selectedService);
+    const costForService = serviceData ? serviceData.totalCost : 0;
+  
     return (
       <ServiceResourceDetails
         serviceName={selectedService}
+        serviceCost={costForService} // Pass the cost to the details component
         credentials={credentials}
         onBack={() => setSelectedService(null)}
       />

@@ -17,8 +17,38 @@ const credentialsSchema = Joi.object({
     })
 });
 
+// Add this new schema below the credentialsSchema
+const resourceRequestSchema = Joi.object({
+  accountId: Joi.string()
+    .pattern(/^\d{12}$/)
+    .required(),
+  roleArn: Joi.string()
+    .pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/)
+    .required(),
+  serviceName: Joi.string().required()
+});
+
 export const validateCredentials = (req, res, next) => {
   const { error, value } = credentialsSchema.validate(req.body);
+  
+  if (error) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message
+      }))
+    });
+  }
+  
+  req.body = value;
+  next();
+};
+
+// Add this new middleware function at the end of the file
+export const validateResourceRequest = (req, res, next) => {
+  const { error, value } = resourceRequestSchema.validate(req.body);
   
   if (error) {
     return res.status(400).json({
