@@ -1,12 +1,7 @@
-import {
-  CostExplorerClient,
-  GetCostAndUsageCommand,
-} from '@aws-sdk/client-cost-explorer';
-import {
-  ResourceGroupsTaggingAPIClient,
-  GetResourcesCommand,
-} from '@aws-sdk/client-resource-groups-tagging-api';
-import { fromTemporaryCredentials } from '@aws-sdk/credential-providers';
+// cost-service-athena.js
+import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand } from "@aws-sdk/client-athena";
+import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
+import { ResourceGroupsTaggingAPIClient, GetResourcesCommand } from "@aws-sdk/client-resource-groups-tagging-api";
 import { EC2Client, DescribeInstancesCommand, DescribeRegionsCommand } from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
@@ -29,665 +24,633 @@ import { LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
 import { StorageGatewayClient, ListGatewaysCommand } from '@aws-sdk/client-storage-gateway';
 
 export class CostService {
-    constructor(accountId, roleArn) {
-        this.accountId = accountId;
-        this.roleArn = roleArn;
-        this.region = process.env.AWS_REGION || 'us-east-1';
+  constructor(accountId, roleArn) {
+    this.accountId = accountId;
+    this.roleArn = roleArn;
+    this.region = process.env.AWS_REGION || 'us-east-1';
+    this.athenaOutput = process.env.ATHENA_OUTPUT_S3; // e.g. 's3://my-athena-results/'
+    this.athenaDatabase = process.env.ATHENA_DATABASE || 'aws_cost_analysis_db';
+    this.athenaWorkGroup = process.env.ATHENA_WORKGROUP || undefined; // optional
+    if (!this.athenaOutput) {
+      console.warn('⚠️ ATHENA_OUTPUT_S3 not set. Athena StartQueryExecution will likely fail without an output location.');
+    }
+  }
+
+  async getCredentials() {
+    return fromTemporaryCredentials({
+      params: {
+        RoleArn: this.roleArn,
+        RoleSessionName: `cost-analysis-${Date.now()}`,
+        DurationSeconds: 3600,
+      },
+    })();
+  }
+
+  async getAthenaClient() {
+    const credentials = await this.getCredentials();
+    return new AthenaClient({ region: this.region, credentials });
+  }
+
+  async getResourceGroupsClient() {
+    const credentials = await this.getCredentials();
+    return new ResourceGroupsTaggingAPIClient({ region: this.region, credentials });
+  }
+
+  async getEc2Client() {
+    const credentials = await this.getCredentials();
+    return new EC2Client({ region: this.region, credentials });
+  }
+
+  // ---------- Athena helper ----------
+  // Runs an Athena query, polls until completion, and returns rows as array of objects.
+  async runAthenaQuery(sql, { database = this.athenaDatabase, workGroup = this.athenaWorkGroup } = {}) {
+    const client = await this.getAthenaClient();
+    if (!this.athenaOutput) throw new Error('ATHENA_OUTPUT_S3 environment variable is required (e.g. s3://bucket/path/)');
+
+    const startCmd = new StartQueryExecutionCommand({
+      QueryString: sql,
+      ResultConfiguration: { OutputLocation: this.athenaOutput },
+      QueryExecutionContext: { Database: database },
+      WorkGroup: workGroup,
+    });
+
+    const startRes = await client.send(startCmd);
+    const qid = startRes.QueryExecutionId;
+    if (!qid) throw new Error('Failed to start Athena query');
+
+    // poll for completion
+    const getExec = new GetQueryExecutionCommand({ QueryExecutionId: qid });
+    let state;
+    const maxMs = 120_000; // 120s poll timeout
+    const intervalMs = 1000;
+    const startTs = Date.now();
+    while (true) {
+      const execRes = await client.send(getExec);
+      state = execRes?.QueryExecution?.Status?.State;
+      if (state === 'SUCCEEDED') break;
+      if (state === 'FAILED' || state === 'CANCELLED') {
+        const reason = execRes?.QueryExecution?.Status?.StateChangeReason || 'unknown';
+        throw new Error(`Athena query ${qid} ${state}: ${reason}`);
+      }
+      if (Date.now() - startTs > maxMs) {
+        throw new Error(`Athena query ${qid} timed out after ${maxMs}ms (state=${state})`);
+      }
+      await new Promise(r => setTimeout(r, intervalMs));
     }
 
-    async getCredentials() {
-        return fromTemporaryCredentials({
-            params: {
-                RoleArn: this.roleArn,
-                RoleSessionName: `cost-analysis-${Date.now()}`,
-                DurationSeconds: 3600,
-            },
-        });
-    }
-
-    async getCostExplorerClient() {
-        const credentials = await this.getCredentials();
-        return new CostExplorerClient({ region: this.region, credentials });
-    }
-
-    async getResourceGroupsClient() {
-        const credentials = await this.getCredentials();
-        return new ResourceGroupsTaggingAPIClient({ region: this.region, credentials });
-    }
-    
-    async getEc2Client() {
-        const credentials = await this.getCredentials();
-        return new EC2Client({ region: this.region, credentials });
-    }
-
-    getDateRange(months = 1) {
-        const endDate = new Date();
-        const startDate = new Date();
-        if (months === 1) {
-            startDate.setDate(1);
+    // fetch results (handle pagination)
+    const rows = [];
+    let nextToken = undefined;
+    do {
+      const resultsCmd = new GetQueryResultsCommand({ QueryExecutionId: qid, NextToken: nextToken });
+      const resultsRes = await client.send(resultsCmd);
+      const resultSet = resultsRes.ResultSet;
+      const rsRows = resultSet?.Rows || [];
+      // First result row contains column names (header) on first page.
+      if (!rows.length && rsRows.length > 0) {
+        // On Athena, first row is header. Convert to column names:
+        const headerRow = rsRows[0].Data.map(d => (d.VarCharValue || '').trim());
+        // For the rest of rows map fields by header.
+        for (let i = 1; i < rsRows.length; i++) {
+          const dataRow = rsRows[i].Data.map(d => (d.VarCharValue || null));
+          const obj = {};
+          for (let c = 0; c < headerRow.length; c++) obj[headerRow[c]] = dataRow[c] === null ? null : dataRow[c];
+          rows.push(obj);
+        }
+      } else if (rsRows.length > 0) {
+        // subsequent pages may or may not repeat header - safer to parse using first page header saved earlier
+        // But GetQueryResults does not return header on subsequent pages - we'll assume header already captured.
+        // We'll fetch header from the initial page by re-fetching first page if needed.
+        // Simpler approach: fetch the header once from the first page above. Here we assume 'rows' already started.
+        const header = Object.keys(rows[0] || {});
+        // If rows is empty and we didn't capture header, attempt simple fallback:
+        if (!header.length) {
+          // fallback to positional mapping like col0, col1...
+          for (let i = 0; i < rsRows.length; i++) {
+            const dataRow = rsRows[i].Data.map(d => (d.VarCharValue || null));
+            const obj = {};
+            for (let c = 0; c < dataRow.length; c++) obj[`col${c}`] = dataRow[c];
+            rows.push(obj);
+          }
         } else {
-            startDate.setMonth(startDate.getMonth() - months);
-            startDate.setDate(1);
-        }
-        const formatDate = (date) => {
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-        const start = formatDate(startDate);
-        const end = formatDate(endDate);
-        console.log(`📅 Date range (Corrected): ${start} to ${end}`);
-        return { Start: start, End: end };
-    }
-    
-    // --- START: COST ANALYSIS FUNCTIONS ---
-    
-    async getDailyCostData() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - 30);
-            const formatDate = (date) => date.toISOString().split('T')[0];
-            const timePeriod = { Start: formatDate(startDate), End: formatDate(endDate) };
-
-            console.log(`📊 Fetching daily cost data from ${timePeriod.Start} to ${timePeriod.End}`);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'DAILY',
-                Metrics: ['BlendedCost'],
-                GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
-            });
-            const response = await client.send(command);
-            const dailyData = response.ResultsByTime || [];
-            console.log(`✅ Retrieved ${dailyData.length} days of cost data`);
-            return dailyData;
-        } catch (error) {
-            console.error('❌ Error fetching daily cost data:', error.message);
-            throw new Error(`Failed to fetch daily cost data: ${error.message}`);
-        }
-    }
-
-    async getWeeklyCostData() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - (12 * 7));
-            const formatDate = (date) => date.toISOString().split('T')[0];
-            const timePeriod = { Start: formatDate(startDate), End: formatDate(endDate) };
-
-            console.log(`📊 Fetching weekly cost data from ${timePeriod.Start} to ${timePeriod.End}`);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'DAILY',
-                Metrics: ['BlendedCost'],
-                GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }],
-            });
-            const response = await client.send(command);
-            const dailyData = response.ResultsByTime || [];
-            const weeklyData = [];
-            for (let i = 0; i < dailyData.length; i += 7) {
-                const weekData = dailyData.slice(i, i + 7);
-                if (weekData.length === 0) continue;
-                const weekStart = new Date(weekData[0].TimePeriod.Start);
-                const weekEnd = new Date(weekData[weekData.length - 1].TimePeriod.End);
-                const weekServices = {};
-                weekData.forEach(day => {
-                    day.Groups?.forEach(group => {
-                        const service = group.Keys?.[0] || 'Unknown';
-                        const cost = parseFloat(group.Metrics?.BlendedCost?.Amount || '0');
-                        weekServices[service] = (weekServices[service] || 0) + cost;
-                    });
-                });
-                const weekGroups = Object.entries(weekServices).map(([service, cost]) => ({
-                    Keys: [service],
-                    Metrics: { BlendedCost: { Amount: cost.toString() } }
-                }));
-                weeklyData.push({
-                    TimePeriod: { Start: weekStart.toISOString().split('T')[0], End: weekEnd.toISOString().split('T')[0] },
-                    Groups: weekGroups
-                });
-            }
-            console.log(`✅ Processed ${weeklyData.length} weeks of cost data`);
-            return weeklyData;
-        } catch (error) {
-            console.error('❌ Error fetching weekly cost data:', error.message);
-            throw new Error(`Failed to fetch weekly cost data: ${error.message}`);
-        }
-    }
-
-    async getCostTrendData() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const endDate = new Date();
-            const startDate = new Date();
-            startDate.setMonth(startDate.getMonth() - 6);
-            startDate.setDate(1);
-            const formatDate = (date) => date.toISOString().split('T')[0];
-            const timePeriod = { Start: formatDate(startDate), End: formatDate(endDate) };
-
-            console.log(`📊 Fetching cost trend data from ${timePeriod.Start} to ${timePeriod.End}`);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'MONTHLY',
-                Metrics: ['BlendedCost'],
-            });
-            const response = await client.send(command);
-            const monthlyData = response.ResultsByTime || [];
-            const trendData = monthlyData.map(month => {
-                const cost = parseFloat(month.Total?.BlendedCost?.Amount || '0');
-                const startDate = new Date(month.TimePeriod.Start);
-                const monthName = startDate.toLocaleDateString('en-US', { month: 'short' });
-                return { month: monthName, cost: cost, period: month.TimePeriod };
-            });
-            console.log('✅ Cost trend data:', trendData.map(d => `${d.month}: $${d.cost.toFixed(2)}`));
-            return trendData;
-        } catch (error) {
-            console.error('❌ Error fetching cost trend data:', error);
-            throw new Error(`Failed to fetch cost trend data: ${error.message}`);
-        }
-    }
-    
-    async getTotalMonthlyCost() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const timePeriod = this.getDateRange(1);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'MONTHLY',
-                Metrics: ['BlendedCost'],
-            });
-            const response = await client.send(command);
-            const totalCost = response.ResultsByTime?.[0]?.Total?.BlendedCost?.Amount || '0';
-            const roundedCost = parseFloat(totalCost).toFixed(2);
-            console.log('✅ Total monthly cost fetched:', roundedCost);
-            return parseFloat(roundedCost);
-        } catch (error) {
-            console.error('❌ Error fetching total monthly cost:', error);
-            throw new Error(`Failed to fetch total monthly cost: ${error.message}`);
-        }
-    }
-
-    async getServiceCosts() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const timePeriod = this.getDateRange(1);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'MONTHLY',
-                Metrics: ['BlendedCost'],
-                GroupBy: [
-                    { Type: 'DIMENSION', Key: 'SERVICE' },
-                    { Type: 'DIMENSION', Key: 'REGION' },
-                ],
-            });
-            const response = await client.send(command);
-            const groups = response.ResultsByTime?.[0]?.Groups || [];
-            const serviceCosts = groups
-                .map(group => ({
-                    service: group.Keys?.[0] || 'Unknown',
-                    region: group.Keys?.[1] || 'NoRegion',
-                    cost: parseFloat(group.Metrics?.BlendedCost?.Amount || '0'),
-                }))
-                .filter(item => item.cost > 0)
-                .sort((a, b) => b.cost - a.cost);
-            console.log('✅ Service costs fetched:', serviceCosts.length, 'line items');
-            return serviceCosts;
-        } catch (error) {
-            console.error('❌ Error fetching service costs:', error);
-            throw new Error(`Failed to fetch service costs: ${error.message}`);
-        }
-    }
-
-    async getRegionCosts() {
-        try {
-            const client = await this.getCostExplorerClient();
-            const timePeriod = this.getDateRange(1);
-            const command = new GetCostAndUsageCommand({
-                TimePeriod: timePeriod,
-                Granularity: 'MONTHLY',
-                Metrics: ['BlendedCost'],
-                GroupBy: [{ Type: 'DIMENSION', Key: 'REGION' }],
-            });
-            const response = await client.send(command);
-            const groups = response.ResultsByTime?.[0]?.Groups || [];
-            const regionCosts = groups
-                .map(group => ({
-                    region: group.Keys?.[0] || 'Unknown',
-                    cost: parseFloat(group.Metrics?.BlendedCost?.Amount || '0'),
-                }))
-                .filter(item => item.cost > 0 && item.region !== 'NoRegion')
-                .sort((a, b) => b.cost - a.cost);
-            console.log('✅ Region costs fetched:', regionCosts.length, 'regions');
-            return regionCosts;
-        } catch (error) {
-            console.error('❌ Error fetching region costs:', error);
-            throw new Error(`Failed to fetch region costs: ${error.message}`);
-        }
-    }
-    
-    async getUserCosts() {
-      try {
-        console.log('🔍 Fetching user costs using Resource Groups API...');
-        const resourceClient = await this.getResourceGroupsClient();
-        const userTags = ['Owner', 'User', 'CreatedBy', 'Team', 'Department'];
-        let userCosts = [];
-        for (const tagKey of userTags) {
-          try {
-            const command = new GetResourcesCommand({ TagFilters: [{ Key: tagKey }] });
-            const response = await resourceClient.send(command);
-            const resources = response.ResourceTagMappingList || [];
-            if (resources.length > 0) {
-              console.log(`✅ Found ${resources.length} resources with ${tagKey} tag`);
-              const userResourceMap = {};
-              resources.forEach(resource => {
-                const userTag = resource.Tags?.find(tag => tag.Key === tagKey);
-                if (userTag && userTag.Value) {
-                  const user = userTag.Value;
-                  if (!userResourceMap[user]) userResourceMap[user] = [];
-                  userResourceMap[user].push(resource);
-                }
-              });
-              userCosts = Object.entries(userResourceMap).map(([user, userResources]) => ({
-                user,
-                cost: this.estimateResourcesCost(userResources),
-                resources: userResources.length,
-              }));
-              break; 
-            }
-          } catch (tagError) {
-            console.log(`⚠️ No resources found for tag ${tagKey}:`, tagError.message);
-            continue;
+          // map by header positions
+          for (let i = 0; i < rsRows.length; i++) {
+            const dataRow = rsRows[i].Data.map(d => (d.VarCharValue || null));
+            const obj = {};
+            for (let c = 0; c < header.length; c++) obj[header[c]] = dataRow[c] === null ? null : dataRow[c];
+            rows.push(obj);
           }
         }
-        const sortedUserCosts = userCosts.filter(item => item.cost > 0).sort((a, b) => b.cost - a.cost);
-        console.log('✅ User costs processed:', sortedUserCosts.length, 'users');
-        return sortedUserCosts;
-      } catch (error) {
-        console.error('❌ Error fetching user costs:', error);
-        return [];
       }
+      nextToken = resultsRes.NextToken;
+    } while (nextToken);
+
+    // convert numeric-looking fields to numbers where applicable
+    return rows.map(r => {
+      const converted = {};
+      for (const k of Object.keys(r)) {
+        const v = r[k];
+        if (v === null) { converted[k] = null; continue; }
+        // try to detect integers and floats
+        if (/^-?\d+$/.test(v)) converted[k] = parseInt(v, 10);
+        else if (/^-?\d+\.\d+(e[-+]?\d+)?$/i.test(v) || /^-?\d+e[-+]?\d+$/i.test(v)) converted[k] = Number(v);
+        else converted[k] = v;
+      }
+      return converted;
+    });
+  }
+  // ---------- end Athena helper ----------
+
+  // date helpers (returns { Start: 'YYYY-MM-DD', End: 'YYYY-MM-DD' })
+  getDateRange(months = 1) {
+    const endDate = new Date();
+    const startDate = new Date();
+    if (months === 1) startDate.setDate(1);
+    else {
+      startDate.setMonth(startDate.getMonth() - months);
+      startDate.setDate(1);
     }
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    return { Start: formatDate(startDate), End: formatDate(endDate) };
+  }
+
+  // ---------- COST ANALYSIS FUNCTIONS (Athena-based) ----------
+
+  // returns array of { day: 'YYYY-MM-DD', Groups: [ { Keys: [service], Metrics: { BlendedCost: { Amount: 'X' } } } ] }
+  async getDailyCostData() {
+    try {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
   
-    async getResourceCosts() {
-      try {
-        console.log('🔍 Fetching resource costs with real daily trends...');
-        const dailyCostData = await this.getDailyCostData();
-        const serviceData = {};
-        dailyCostData.forEach((dayData, dayIndex) => {
-          dayData.Groups?.forEach(group => {
-            const service = group.Keys?.[0] || 'Unknown';
-            const cost = parseFloat(group.Metrics?.BlendedCost?.Amount || '0');
-            if (!serviceData[service]) {
-              serviceData[service] = { type: service, dailyTrend: new Array(30).fill(0), cost: 0, count: 0 };
-            }
-            serviceData[service].dailyTrend[dayIndex] = cost;
-            serviceData[service].cost += cost;
+      // UPDATED: Simple, robust query
+      const sql = `
+        SELECT
+          date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
+          canonical_service AS service,
+          SUM(line_item_unblended_cost) AS total_cost_usd
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
+          AND date(line_item_usage_start_date) <= DATE '${endStr}'
+        GROUP BY 1, 2
+        ORDER BY day ASC, total_cost_usd DESC;
+      `;
+  
+      const rows = await this.runAthenaQuery(sql);
+  
+      // Map Athena service names to friendly names for the dashboard
+      const serviceNameMap = {
+        'Amazon Elastic Compute Cloud': 'EC2',
+        'Amazon Virtual Private Cloud': 'VPC',
+        'Amazon Relational Database Service': 'RDS',
+        'Amazon Simple Storage Service': 'S3',
+        // Add more mappings here to match your Cost Explorer data
+      };
+  
+      const dayMap = {};
+      rows.forEach(r => {
+        const day = r.day;
+        const originalService = r.service;
+        const mappedService = serviceNameMap[originalService] || originalService; // Use mapped name or original
+        const cost = Number(r.total_cost_usd || 0);
+        
+        if (!dayMap[day]) dayMap[day] = {};
+        
+        // Aggregate costs for services that might map to the same name
+        if (!dayMap[day][mappedService]) dayMap[day][mappedService] = 0;
+        dayMap[day][mappedService] += cost;
+      });
+  
+      // Convert the data to the final format for the frontend
+      const dailyData = Object.keys(dayMap).sort().map(day => {
+        const groups = Object.keys(dayMap[day]).map(service => ({
+          Keys: [service],
+          Metrics: { BlendedCost: { Amount: dayMap[day][service].toFixed(4) } }
+        }));
+        return {
+          TimePeriod: { Start: day, End: day },
+          Groups: groups
+        };
+      });
+  
+      return dailyData;
+    } catch (err) {
+        console.error('❌ getDailyCostData failed:', err.message || err);
+        throw err;
+    }
+  }
+
+  // weekly: aggregate the last 12 weeks of daily data into weeks of 7 days
+  async getWeeklyCostData() {
+    try {
+      // reuse daily data then bucket into 7-day windows
+      const daily = await this.getDailyCostData();
+      // transform into weeks (sliding by 7 from the start)
+      const chunks = [];
+      for (let i = 0; i < daily.length; i += 7) {
+        const week = daily.slice(i, i + 7);
+        if (week.length === 0) continue;
+        // sum per service across the week
+        const svcSums = {};
+        week.forEach(day => {
+          day.Groups?.forEach(g => {
+            const service = g.Keys?.[0] || 'Unknown';
+            const amt = parseFloat(g.Metrics?.BlendedCost?.Amount || '0');
+            svcSums[service] = (svcSums[service] || 0) + amt;
           });
         });
-        const resourceClient = await this.getResourceGroupsClient();
-        const resourceCosts = [];
-        for (const [serviceName, data] of Object.entries(serviceData)) {
-          if (data.cost > 0) {
-            try {
-              const resourceType = this.getResourceTypeForService(serviceName);
-              if (resourceType) {
-                const resourceCommand = new GetResourcesCommand({ ResourceTypeFilters: [resourceType] });
-                const resourceResponse = await resourceClient.send(resourceCommand);
-                data.count = resourceResponse.ResourceTagMappingList?.length || 0;
-              }
-            } catch (resourceError) {
-              console.log(`⚠️ Could not get resource count for ${serviceName}`);
-              data.count = 0;
-            }
-            resourceCosts.push({ ...data, trend: data.dailyTrend });
-          }
-        }
-        const sortedResourceCosts = resourceCosts.sort((a, b) => b.cost - a.cost).slice(0, 10);
-        console.log('✅ Resource costs processed with real daily data:', sortedResourceCosts.length, 'resource types');
-        return sortedResourceCosts;
-      } catch (error) {
-        console.error('❌ Error fetching resource costs:', error);
-        throw new Error(`Failed to fetch resource costs: ${error.message}`);
-      }
-    }
-  
-    async getProjectCosts() {
-      try {
-        console.log('🔍 Fetching project costs using Resource Groups API...');
-        const resourceClient = await this.getResourceGroupsClient();
-        const projectTags = ['Project', 'Application', 'Environment', 'Workload'];
-        let projectCosts = [];
-        for (const tagKey of projectTags) {
-          try {
-            const command = new GetResourcesCommand({ TagFilters: [{ Key: tagKey }] });
-            const response = await resourceClient.send(command);
-            const resources = response.ResourceTagMappingList || [];
-            if (resources.length > 0) {
-              console.log(`✅ Found ${resources.length} resources with ${tagKey} tag`);
-              const projectResourceMap = {};
-              resources.forEach(resource => {
-                const projectTag = resource.Tags?.find(tag => tag.Key === tagKey);
-                if (projectTag && projectTag.Value) {
-                  const project = projectTag.Value;
-                  if (!projectResourceMap[project]) projectResourceMap[project] = [];
-                  projectResourceMap[project].push(resource);
-                }
-              });
-              projectCosts = Object.entries(projectResourceMap).map(([project, projectResources]) => {
-                const owners = {};
-                projectResources.forEach(resource => {
-                  const ownerTag = resource.Tags?.find(tag => tag.Key === 'Owner');
-                  if (ownerTag && ownerTag.Value) owners[ownerTag.Value] = (owners[ownerTag.Value] || 0) + 1;
-                });
-                const owner = Object.keys(owners).length > 0 ? Object.keys(owners).reduce((a, b) => owners[a] > owners[b] ? a : b) : 'Unknown';
-                return { project, cost: this.estimateResourcesCost(projectResources), resources: projectResources.length, owner };
-              });
-              break;
-            }
-          } catch (tagError) {
-            console.log(`⚠️ No resources found for tag ${tagKey}:`, tagError.message);
-            continue;
-          }
-        }
-        const sortedProjectCosts = projectCosts.filter(item => item.cost > 0).sort((a, b) => b.cost - a.cost);
-        console.log('✅ Project costs processed:', sortedProjectCosts.length, 'projects');
-        return sortedProjectCosts;
-      } catch (error) {
-        console.error('❌ Error fetching project costs:', error);
-        return [];
-      }
-    }
-  
-    estimateResourcesCost(resources) {
-      let totalCost = 0;
-      resources.forEach(resource => {
-        const resourceType = resource.ResourceARN?.split(':')[2];
-        const resourceSubType = resource.ResourceARN?.split(':')[5]?.split('/')[0];
-        switch (resourceType) {
-          case 'ec2':
-            if (resourceSubType === 'instance') totalCost += Math.random() * 100 + 50;
-            else if (resourceSubType === 'volume') totalCost += Math.random() * 30 + 10;
-            break;
-          case 'rds': totalCost += Math.random() * 200 + 100; break;
-          case 's3': totalCost += Math.random() * 50 + 10; break;
-          case 'lambda': totalCost += Math.random() * 20 + 5; break;
-          case 'elasticloadbalancing': totalCost += Math.random() * 40 + 20; break;
-          default: totalCost += Math.random() * 30 + 10;
-        }
-      });
-      return Math.round(totalCost);
-    }
-    
-    // --- END: COST ANALYSIS FUNCTIONS ---
-    
-    // --- START: RESOURCE FETCHING FUNCTIONS ---
-    async getResourcesForService(serviceName) {
-        console.log(`🔍 Fetching real resources for: ${serviceName}`);
-        const credentials = await this.getCredentials();
-        let resources = [];
-    
-        const ec2BaseClient = new EC2Client({ region: 'us-east-1', credentials });
-        const regionsResponse = await ec2BaseClient.send(new DescribeRegionsCommand({}));
-        const allRegions = regionsResponse.Regions.map(r => r.RegionName);
-        console.log(`🌍 Discovered ${allRegions.length} available AWS regions.`);
-    
-        const processInAllRegions = async (serviceCall) => {
-            await Promise.all(allRegions.map(async (region) => {
-                try {
-                    await serviceCall(region);
-                } catch (e) {
-                    if (e.name !== 'AuthFailure' && e.name !== 'UnrecognizedClientException' && e.name !== 'AccessDeniedException' && !e.message.includes("is not supported in this region")) {
-                        console.log(`⚠️  Could not scan region ${region} for ${serviceName}: ${e.name}`);
-                    }
-                }
-            }));
-        };
-
-        const paginate = async (client, command, outputKey, inputTokenKey = 'NextToken', outputTokenKey = 'NextToken') => {
-            let results = [];
-            let token;
-            do {
-                const response = await client.send(new command.constructor({ ...command.input, [inputTokenKey]: token }));
-                results = results.concat(response[outputKey] || []);
-                token = response[outputTokenKey];
-            } while (token);
-            return results;
-        };
-    
-        switch (serviceName) {
-            case 'Amazon Elastic Compute Cloud - Compute':
-            case 'EC2 - Other':
-                await processInAllRegions(async (region) => {
-                    const ec2 = new EC2Client({ region, credentials });
-                    const data = await ec2.send(new DescribeInstancesCommand({}));
-                    data.Reservations.forEach(r => r.Instances.forEach(i => resources.push({ id: i.InstanceId, name: (i.Tags.find(t => t.Key === 'Name') || {}).Value || i.InstanceId, region, status: i.State.Name, specifications: { type: i.InstanceType }, tags: i.Tags || [] })));
-                });
-                break;
-            case 'Amazon Relational Database Service':
-                 await processInAllRegions(async (region) => {
-                    const rds = new RDSClient({ region, credentials });
-                    const data = await rds.send(new DescribeDBInstancesCommand({}));
-                    data.DBInstances.forEach(db => resources.push({ id: db.DBInstanceIdentifier, name: db.DBInstanceIdentifier, region, status: db.DBInstanceStatus, specifications: { type: db.DBInstanceClass }, tags: db.TagList || [] }));
-                });
-                break;
-            case 'Amazon Simple Storage Service': {
-                const s3 = new S3Client({ region: 'us-east-1', credentials });
-                const data = await s3.send(new ListBucketsCommand({}));
-                data.Buckets.forEach(b => resources.push({ id: b.Name, name: b.Name, region: 'Global', status: 'Active', specifications: { created: b.CreationDate.toISOString() }, tags: [] }));
-                break;
-            }
-            case 'Amazon Elastic Kubernetes Service':
-                await processInAllRegions(async (region) => {
-                    const eks = new EKSClient({ region, credentials });
-                    const data = await eks.send(new ListClustersCommand({}));
-                    data.clusters.forEach(c => resources.push({ id: c, name: c, region, status: 'Active', specifications: {}, tags: [] }));
-                });
-                break;
-            case 'Amazon WorkSpaces':
-                 await processInAllRegions(async (region) => {
-                    const client = new WorkSpacesClient({ region, credentials });
-                    
-                    // 1. Fetch Individual Workspaces
-                    const workspacesData = await client.send(new DescribeWorkspacesCommand({}));
-                    workspacesData.Workspaces.forEach(ws => resources.push({ 
-                        id: ws.WorkspaceId, 
-                        name: ws.UserName || ws.WorkspaceId, 
-                        region, 
-                        status: ws.State, 
-                        specifications: { subType: 'Workspace', bundleId: ws.BundleId, ipAddress: ws.IpAddress }, 
-                        tags: ws.Tags || [] 
-                    }));
-
-                    // 2. Fetch Workspace Bundles (Templates/Pools)
-                    const bundlesData = await client.send(new DescribeWorkspaceBundlesCommand({}));
-                    bundlesData.Bundles.forEach(b => resources.push({
-                        id: b.BundleId,
-                        name: b.Name,
-                        region,
-                        status: 'Available',
-                        specifications: { subType: 'Bundle', owner: b.Owner, compute: b.ComputeType.Name, storage: b.UserStorage.Capacity },
-                        tags: b.Tags || []
-                    }));
-
-                    // 3. Fetch Workspace Directories
-                    const directoriesData = await client.send(new DescribeWorkspaceDirectoriesCommand({}));
-                    directoriesData.Directories.forEach(d => resources.push({
-                        id: d.DirectoryId,
-                        name: d.DirectoryName,
-                        region,
-                        status: d.State,
-                        specifications: { subType: 'Directory', type: d.DirectoryType, dns: d.DnsIpAddresses.join(', ') },
-                        tags: d.Tags || []
-                    }));
-                });
-                break;
-            case 'AmazonCloudWatch':
-            case 'Amazon CloudWatch':
-                 await processInAllRegions(async (region) => {
-                     const cw = new CloudWatchClient({ region, credentials });
-                     const data = await cw.send(new ListDashboardsCommand({}));
-                     data.DashboardEntries.forEach(d => resources.push({ id: d.DashboardName, name: d.DashboardName, region, status: 'Active', specifications: { size: d.Size }, tags: [] }));
-                 });
-                 break;
-            case 'AWS Secrets Manager':
-                await processInAllRegions(async (region) => {
-                    const client = new SecretsManagerClient({ region, credentials });
-                    const command = new ListSecretsCommand({});
-                    const secrets = await paginate(client, command, 'SecretList');
-                    secrets.forEach(s => resources.push({ id: s.ARN, name: s.Name, region, status: 'Active', specifications: { lastChanged: s.LastChangedDate }, tags: s.Tags || [] }));
-                });
-                break;
-            case 'AWS Key Management Service':
-                await processInAllRegions(async (region) => {
-                    const client = new KMSClient({ region, credentials });
-                    const command = new ListKeysCommand({});
-                    const keys = await paginate(client, command, 'Keys');
-                    keys.forEach(k => resources.push({ id: k.KeyId, name: k.KeyArn, region, status: 'Enabled', specifications: { keyId: k.KeyId }, tags: [] }));
-                });
-                break;
-            case 'AWS Config':
-                await processInAllRegions(async (region) => {
-                    const client = new ConfigServiceClient({ region, credentials });
-                    const data = await client.send(new DescribeConfigRulesCommand({}));
-                    data.ConfigRules.forEach(r => resources.push({ id: r.ConfigRuleId, name: r.ConfigRuleName, region, status: r.ConfigRuleState, specifications: {}, tags: [] }));
-                });
-                break;
-            case 'Amazon Route 53': { // Global service
-                const client = new Route53Client({ region: 'us-east-1', credentials });
-                const command = new ListHostedZonesCommand({});
-                const zones = await paginate(client, command, 'HostedZones', 'Marker', 'NextMarker');
-                zones.forEach(z => resources.push({ id: z.Id, name: z.Name, region: 'Global', status: 'Active', specifications: { isPrivate: z.Config.PrivateZone, resourceCount: z.ResourceRecordSetCount }, tags: [] }));
-                break;
-            }
-            case 'Amazon Elastic Container Registry':
-                await processInAllRegions(async (region) => {
-                    const client = new ECRClient({ region, credentials });
-                    const command = new DescribeRepositoriesCommand({});
-                    const repos = await paginate(client, command, 'repositories');
-                    repos.forEach(r => resources.push({ id: r.repositoryArn, name: r.repositoryName, region, status: 'Active', specifications: { uri: r.repositoryUri }, tags: [] }));
-                });
-                break;
-            case 'Amazon API Gateway':
-                await processInAllRegions(async (region) => {
-                    const client = new ApiGatewayV2Client({ region, credentials });
-                    const data = await client.send(new GetApisCommand({}));
-                    data.Items.forEach(api => resources.push({ id: api.ApiId, name: api.Name, region, status: 'Active', specifications: { protocol: api.ProtocolType }, tags: api.Tags ? Object.entries(api.Tags).map(([k, v]) => ({ Key: k, Value: v })) : [] }));
-                });
-                break;
-            case 'AWS Systems Manager':
-                await processInAllRegions(async (region) => {
-                    const client = new SSMClient({ region, credentials });
-                    const command = new DescribeInstanceInformationCommand({});
-                    const instances = await paginate(client, command, 'InstanceInformationList');
-                    instances.forEach(i => resources.push({ id: i.InstanceId, name: i.ComputerName || i.InstanceId, region, status: i.PingStatus, specifications: { platform: i.PlatformName }, tags: [] }));
-                });
-                break;
-            case 'Amazon DynamoDB':
-                await processInAllRegions(async (region) => {
-                    const client = new DynamoDBClient({ region, credentials });
-                    const command = new ListTablesCommand({});
-                    const tables = await paginate(client, command, 'TableNames', 'ExclusiveStartTableName', 'LastEvaluatedTableName');
-                    tables.forEach(t => resources.push({ id: t, name: t, region, status: 'Active', specifications: {}, tags: [] }));
-                });
-                break;
-            case 'Amazon Location Service':
-                await processInAllRegions(async (region) => {
-                    const client = new LocationClient({ region, credentials });
-                    const data = await client.send(new ListGeofenceCollectionsCommand({}));
-                    data.Entries.forEach(gc => resources.push({ id: gc.CollectionName, name: gc.CollectionName, region, status: 'Active', specifications: { description: gc.Description }, tags: [] }));
-                });
-                break;
-            case 'Amazon Elastic File System':
-                await processInAllRegions(async (region) => {
-                    const client = new EFSClient({ region, credentials });
-                    const command = new DescribeFileSystemsCommand({});
-                    const filesystems = await paginate(client, command, 'FileSystems', 'Marker', 'NextMarker');
-                    filesystems.forEach(fs => resources.push({ id: fs.FileSystemId, name: fs.Name || fs.FileSystemId, region, status: fs.LifeCycleState, specifications: { performanceMode: fs.PerformanceMode }, tags: fs.Tags || [] }));
-                });
-                break;
-            case 'AWS Backup':
-                await processInAllRegions(async (region) => {
-                    const client = new BackupClient({ region, credentials });
-                    const command = new ListBackupVaultsCommand({});
-                    const vaults = await paginate(client, command, 'BackupVaultList');
-                    vaults.forEach(v => resources.push({ id: v.BackupVaultArn, name: v.BackupVaultName, region, status: 'Active', specifications: { encryptionKey: v.EncryptionKeyArn }, tags: [] }));
-                });
-                break;
-            case 'Amazon Simple Queue Service':
-                await processInAllRegions(async (region) => {
-                    const client = new SQSClient({ region, credentials });
-                    const command = new ListQueuesCommand({});
-                    const queues = await paginate(client, command, 'QueueUrls');
-                    queues.forEach(qUrl => resources.push({ id: qUrl, name: qUrl.split('/').pop(), region, status: 'Active', specifications: {}, tags: [] }));
-                });
-                break;
-            case 'AWS Lambda':
-                await processInAllRegions(async (region) => {
-                    const client = new LambdaClient({ region, credentials });
-                    const command = new ListFunctionsCommand({});
-                    const functions = await paginate(client, command, 'Functions', 'Marker', 'NextMarker');
-                    functions.forEach(f => resources.push({ id: f.FunctionArn, name: f.FunctionName, region, status: 'Active', specifications: { runtime: f.Runtime, memory: f.MemorySize }, tags: [] }));
-                });
-                break;
-            case 'AWS Storage Gateway':
-                await processInAllRegions(async (region) => {
-                    const client = new StorageGatewayClient({ region, credentials });
-                    const command = new ListGatewaysCommand({});
-                    const gateways = await paginate(client, command, 'Gateways', 'Marker', 'NextMarker');
-                    gateways.forEach(g => resources.push({ id: g.GatewayARN, name: g.GatewayName, region, status: g.GatewayOperationalState, specifications: { type: g.GatewayType }, tags: [] }));
-                });
-                break;
-            default:
-                console.log(`⚠️ No specific resource handler for "${serviceName}".`);
-                break;
-        }
-    
-        const formattedResources = resources.map(res => ({
-            id: res.id,
-            name: res.name,
-            type: serviceName,
-            region: res.region || 'unknown',
-            owner: (res.tags.find(t => t.Key.toLowerCase() === 'owner') || {}).Value || 'Unknown',
-            project: (res.tags.find(t => t.Key.toLowerCase() === 'project') || {}).Value || 'Unassigned',
-            createdDate: 'N/A',
-            status: res.status,
-            cost: 0,
-            tags: res.tags.map(t => ({ key: t.Key, value: t.Value })),
-            specifications: res.specifications,
+        const groups = Object.entries(svcSums).map(([svc, cost]) => ({
+          Keys: [svc],
+          Metrics: { BlendedCost: { Amount: cost.toString() } }
         }));
-    
-        console.log(`✅ Formatted and enriched ${formattedResources.length} real resources for ${serviceName}.`);
-        return formattedResources;
+        const start = week[0].TimePeriod.Start;
+        const end = week[week.length - 1].TimePeriod.End;
+        chunks.push({ TimePeriod: { Start: start, End: end }, Groups: groups });
+      }
+      return chunks;
+    } catch (err) {
+      console.error('❌ getWeeklyCostData failed:', err);
+      throw err;
     }
-    
-    getResourceTypeForService(serviceName) {
-        const serviceToResourceType = {
-            'Amazon Elastic Compute Cloud - Compute': 'ec2:instance',
-            'EC2 - Other': 'ec2',
-            'Amazon Relational Database Service': 'rds:db',
-            'Amazon Simple Storage Service': 's3:bucket',
-            'Amazon Elastic Kubernetes Service': 'eks:cluster',
-            'Amazon WorkSpaces': 'workspaces:workspace',
-            'Amazon CloudWatch': 'cloudwatch:dashboard',
-            'AmazonCloudWatch': 'cloudwatch:dashboard',
-            'AWS Secrets Manager': 'secretsmanager:secret',
-            'AWS Key Management Service': 'kms:key',
-            'AWS Config': 'config:rule',
-            'Amazon Route 53': 'route53:hostedzone',
-            'Amazon Elastic Container Registry': 'ecr:repository',
-            'Amazon API Gateway': 'apigateway:restapis',
-            'AWS Systems Manager': 'ssm:managed-instance',
-            'Amazon DynamoDB': 'dynamodb:table',
-            'Amazon Location Service': 'location:geofence-collection',
-            'Amazon Elastic File System': 'efs:file-system',
-            'AWS Backup': 'backup:backup-vault',
-            'Amazon Simple Queue Service': 'sqs:queue',
-            'AWS Lambda': 'lambda:function',
-            'AWS Storage Gateway': 'storagegateway:gateway',
+  }
+
+  // monthly trend for past 6 months
+  async getCostTrendData() {
+    try {
+      const end = new Date();
+      const start = new Date();
+      start.setMonth(start.getMonth() - 6);
+      start.setDate(1);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+
+      const sql = `
+        SELECT date_format(line_item_usage_start_date, '%Y-%m') AS month,
+               SUM(cost_cents) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
+          AND date(line_item_usage_start_date) <= DATE '${endStr}'
+        GROUP BY date_format(line_item_usage_start_date, '%Y-%m')
+        ORDER BY month ASC;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      return rows.map(r => {
+        const monthLabel = r.month;
+        const cost = Number(r.cost_cents || 0) / 100;
+        return { month: monthLabel, cost, period: monthLabel };
+      });
+    } catch (err) {
+      console.error('❌ getCostTrendData failed:', err);
+      throw err;
+    }
+  }
+
+  async getTotalMonthlyCost() {
+    try {
+      const { Start, End } = this.getDateRange(1); // current month from 1st to today
+      // Use date range inclusive of today
+      const sql = `
+        SELECT SUM(cost_cents) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+          AND date(line_item_usage_start_date) <= DATE '${End}';
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      const cents = (rows[0] && rows[0].cost_cents) ? Number(rows[0].cost_cents) : 0;
+      return Number((cents / 100).toFixed(2));
+    } catch (err) {
+      console.error('❌ getTotalMonthlyCost failed:', err);
+      throw err;
+    }
+  }
+
+  async getServiceCosts() {
+    try {
+      const { Start, End } = this.getDateRange(1);
+      // group by canonical service and region (product_location)
+      const sql = `
+        SELECT canonical_service AS service,
+               product_location AS region,
+               SUM(cost_cents) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+          AND date(line_item_usage_start_date) <= DATE '${End}'
+        GROUP BY canonical_service, product_location
+        ORDER BY cost_cents DESC
+        LIMIT 500;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      return rows
+        .map(r => ({ service: r.service || 'Unknown', region: r.region || 'NoRegion', cost: Number(r.cost_cents || 0) / 100 }))
+        .filter(x => x.cost > 0)
+        .sort((a,b) => b.cost - a.cost);
+    } catch (err) {
+      console.error('❌ getServiceCosts failed:', err);
+      throw err;
+    }
+  }
+
+  async getRegionCosts() {
+    try {
+      const { Start, End } = this.getDateRange(1);
+      const sql = `
+        SELECT product_location AS region,
+               SUM(cost_cents) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+          AND date(line_item_usage_start_date) <= DATE '${End}'
+        GROUP BY product_location
+        ORDER BY cost_cents DESC;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      return rows
+        .map(r => ({ region: r.region || 'Unknown', cost: Number(r.cost_cents || 0) / 100 }))
+        .filter(x => x.cost > 0);
+    } catch (err) {
+      console.error('❌ getRegionCosts failed:', err);
+      throw err;
+    }
+  }
+
+  // Owner/user costs using CUR tags (resource_tags map)
+  async getUserCosts({ billingPeriod = null, fullMonth = false } = {}) {
+    try {
+      let Start, End;
+      if (billingPeriod) {
+        const [y, m] = billingPeriod.split('-').map(x => parseInt(x, 10));
+        const startDate = new Date(y, m - 1, 1);
+        const nextMonth = new Date(y, m, 1);
+        nextMonth.setDate(0); // last day of month
+        Start = startDate.toISOString().split('T')[0];
+        End = nextMonth.toISOString().split('T')[0];
+      } else {
+        ({ Start, End } = this.getDateRange(1, { fullMonth }));
+      }
+  
+      const sql = `
+        SELECT owner_tag, total_usd, total_cents, resource_count
+        FROM (
+          SELECT
+            COALESCE(
+              NULLIF(TRIM(resource_tags['user_owner']), '')
+            ) AS owner_tag,
+            SUM(cost_usd) AS total_usd,
+            SUM(cost_cents) AS total_cents,
+            COUNT(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resource_count
+          FROM ${this.athenaDatabase}.cur_canonical_services_v1
+          WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+            AND date(line_item_usage_start_date) <= DATE '${End}'
+            AND line_item_unblended_cost IS NOT NULL
+            AND line_item_unblended_cost <> 0
+          GROUP BY
+            COALESCE(
+              NULLIF(TRIM(resource_tags['user_owner']), '')
+            )
+        ) t
+        WHERE owner_tag IS NOT NULL
+        ORDER BY total_cents DESC
+        LIMIT 500;
+      `;
+  
+      console.log('getUserCosts SQL:\n', sql);
+      const rows = await this.runAthenaQuery(sql);
+      console.log('getUserCosts - sample rows:', rows.slice(0, 8));
+  
+      return rows.map(r => ({
+        user: r.owner_tag,
+        cost: Number(r.total_usd || 0),
+        cost_cents: Number(r.total_cents || 0),
+        resources: Number(r.resource_count || 0)
+      }));
+    } catch (err) {
+      console.error('❌ getUserCosts failed:', err);
+      return [];
+    }
+  }
+
+  // resource costs: daily trend for services (uses Athena for cost trend + Resource Groups for counts)
+  async getResourceCosts() {
+    try {
+      console.log('🔍 Validating resource data from Athena...');
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+  
+      const sql = `
+        SELECT
+          canonical_service AS service,
+          date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
+          SUM(cost_cents) AS cost_cents,
+          COUNT(DISTINCT line_item_resource_id) AS resource_count
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE
+          date(line_item_usage_start_date) >= DATE '${startStr}' AND
+          date(line_item_usage_start_date) <= DATE '${endStr}' AND
+          line_item_resource_id IS NOT NULL AND
+          canonical_service IS NOT NULL
+        GROUP BY
+          canonical_service,
+          date_format(line_item_usage_start_date, '%Y-%m-%d')
+        ORDER BY
+          service, day;
+      `;
+      
+      const rows = await this.runAthenaQuery(sql);
+  
+      // Convert to structure: service -> dailyTrend array and total
+      const svcMap = {};
+      const uniqueDays = [...new Set(rows.map(r => r.day))].sort();
+  
+      rows.forEach(r => {
+        const s = r.service || 'Unknown';
+        if (!svcMap[s]) svcMap[s] = {
+          type: s,
+          dailyTrend: uniqueDays.map(_ => 0),
+          cost: 0,
+          count: 0
         };
-        return serviceToResourceType[serviceName] || null;
+        
+        const dayIndex = uniqueDays.indexOf(r.day);
+        const dollars = Number(r.cost_cents || 0) / 100;
+        svcMap[s].dailyTrend[dayIndex] = dollars;
+        svcMap[s].cost += dollars;
+        
+        // We will sum the count for each day to get a total for the month,
+        // as resource IDs might appear on multiple days.
+        svcMap[s].count += Number(r.resource_count || 0);
+      });
+  
+      const results = Object.values(svcMap).map(item => ({
+        ...item,
+        // Use the daily trend array
+        trend: item.dailyTrend
+      }));
+  
+      // Sort by total cost and return the top 10
+      return results.sort((a, b) => b.cost - a.cost).slice(0, 10);
+    } catch (err) {
+      console.error('❌ getResourceCosts failed:', err);
+      throw err;
     }
+  }
+
+  async getProjectCosts({ billingPeriod = null, fullMonth = false } = {}) {
+    try {
+      let Start, End;
+      if (billingPeriod) {
+        const [y, m] = billingPeriod.split('-').map(x => parseInt(x, 10));
+        const startDate = new Date(y, m - 1, 1);
+        const nextMonth = new Date(y, m, 1);
+        nextMonth.setDate(0); // last day of month
+        Start = startDate.toISOString().split('T')[0];
+        End = nextMonth.toISOString().split('T')[0];
+      } else {
+        ({ Start, End } = this.getDateRange(1, { fullMonth }));
+      }
+  
+      const sql = `
+        SELECT project_tag, total_usd, total_cents, resource_count
+        FROM (
+          SELECT
+            COALESCE(NULLIF(TRIM(resource_tags['user_project']), '')) AS project_tag,
+            SUM(cost_usd) AS total_usd,
+            SUM(cost_cents) AS total_cents,
+            COUNT(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resource_count
+          FROM ${this.athenaDatabase}.cur_canonical_services_v1
+          WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+            AND date(line_item_usage_start_date) <= DATE '${End}'
+            AND line_item_unblended_cost IS NOT NULL
+            AND line_item_unblended_cost <> 0
+          GROUP BY COALESCE(NULLIF(TRIM(resource_tags['user_project']), ''))
+        ) t
+        WHERE project_tag IS NOT NULL
+        ORDER BY total_cents DESC
+        LIMIT 500;
+      `;
+  
+      console.log('getProjectCosts SQL:\n', sql);
+      const rows = await this.runAthenaQuery(sql);
+      console.log('getProjectCosts - sample rows:', rows.slice(0, 8));
+  
+      return rows.map(r => ({
+        project: r.project_tag,
+        cost: Number(r.total_usd || 0),
+        cost_cents: Number(r.total_cents || 0),
+        resources: Number(r.resource_count || 0)
+      }));
+    } catch (err) {
+      console.error('❌ getProjectCosts failed:', err);
+      return [];
+    }
+  }
+
+  estimateResourcesCost(resources) {
+    // This function is now deprecated as we'll get actual costs from CUR.
+    // However, if you have other uses for it, you can keep it.
+    let totalCost = 0;
+    resources.forEach(resource => {
+      const resourceType = resource.ResourceARN?.split(':')[2];
+      const resourceSubType = resource.ResourceARN?.split(':')[5]?.split('/')[0];
+      switch (resourceType) {
+        case 'ec2':
+          if (resourceSubType === 'instance') totalCost += Math.random() * 100 + 50;
+          else if (resourceSubType === 'volume') totalCost += Math.random() * 30 + 10;
+          break;
+        case 'rds': totalCost += Math.random() * 200 + 100; break;
+        case 's3': totalCost += Math.random() * 50 + 10; break;
+        case 'lambda': totalCost += Math.random() * 20 + 5; break;
+        case 'elasticloadbalancing': totalCost += Math.random() * 40 + 20; break;
+        default: totalCost += Math.random() * 30 + 10;
+      }
+    });
+    return Math.round(totalCost);
+  }
+
+  // ---------- RESOURCE FETCHING FUNCTIONS (UPDATED to use Athena) ----------
+  async getResourcesForService(serviceName) {
+    try {
+      console.log(`🔍 Fetching resource details for: ${serviceName} from Athena.`);
+      const { Start, End } = this.getDateRange(1);
+      const sql = `
+        SELECT
+            line_item_resource_id,
+            canonical_service,
+            product_location,
+            SUM(line_item_unblended_cost) AS total_cost
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+            AND date(line_item_usage_start_date) <= DATE '${End}'
+            AND canonical_service = '${serviceName}'
+            AND line_item_resource_id IS NOT NULL
+        GROUP BY
+            line_item_resource_id,
+            canonical_service,
+            product_location
+        ORDER BY
+            total_cost DESC;
+      `;
+      
+      const rows = await this.runAthenaQuery(sql);
+
+      const formattedResources = rows.map(r => ({
+        id: r.line_item_resource_id,
+        name: r.line_item_resource_id,
+        type: r.canonical_service,
+        region: r.product_location || 'unknown',
+        // Note: Owner and Project tags would require a slightly more complex query
+        // to extract from the 'resource_tags' column if needed, but for now
+        // let's use placeholders as an example.
+        owner: 'Unknown (from CUR)',
+        project: 'Unassigned (from CUR)',
+        createdDate: 'N/A',
+        status: 'Active',
+        cost: Number(r.total_cost),
+        tags: [], // Tags can be extracted with a more complex query if needed
+        specifications: {},
+      }));
+
+      console.log(`✅ Formatted and enriched ${formattedResources.length} resources for ${serviceName} from Athena.`);
+      return formattedResources;
+    } catch (err) {
+      console.error(`❌ getResourcesForService failed for ${serviceName}:`, err.message || err);
+      throw err;
+    }
+  }
+
+  getResourceTypeForService(serviceName) {
+    const serviceToResourceType = {
+      'Amazon Elastic Compute Cloud - Compute': 'ec2:instance',
+      'EC2 - Other': 'ec2',
+      'Amazon Relational Database Service': 'rds:db',
+      'Amazon Simple Storage Service': 's3:bucket',
+      'Amazon Elastic Kubernetes Service': 'eks:cluster',
+      'Amazon WorkSpaces': 'workspaces:workspace',
+      'Amazon CloudWatch': 'cloudwatch:dashboard',
+      'AmazonCloudWatch': 'cloudwatch:dashboard',
+      'AWS Secrets Manager': 'secretsmanager:secret',
+      'AWS Key Management Service': 'kms:key',
+      'AWS Config': 'config:rule',
+      'Amazon Route 53': 'route53:hostedzone',
+      'Amazon Elastic Container Registry': 'ecr:repository',
+      'Amazon API Gateway': 'apigateway:restapis',
+      'AWS Systems Manager': 'ssm:managed-instance',
+      'Amazon DynamoDB': 'dynamodb:table',
+      'Amazon Location Service': 'location:geofence-collection',
+      'Amazon Elastic File System': 'efs:file-system',
+      'AWS Backup': 'backup:backup-vault',
+      'Amazon Simple Queue Service': 'sqs:queue',
+      'AWS Lambda': 'lambda:function',
+      'AWS Storage Gateway': 'storagegateway:gateway',
+    };
+    return serviceToResourceType[serviceName] || null;
+  }
 }
