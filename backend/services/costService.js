@@ -1,3 +1,4 @@
+// adarsh505-cloud/dashboard/Dashboard-6295e522559db0932701c145829146e41e95704a/backend/services/costService.js
 // cost-service-athena.js
 import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand } from "@aws-sdk/client-athena";
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
@@ -34,6 +35,22 @@ export class CostService {
     if (!this.athenaOutput) {
       console.warn('⚠️ ATHENA_OUTPUT_S3 not set. Athena StartQueryExecution will likely fail without an output location.');
     }
+
+    // Map product codes (as seen in CUR) to friendly names used by the dashboard
+    this.serviceNameMap = {
+      'AmazonEC2': 'EC2',
+      'AmazonVPC': 'VPC',
+      'AmazonRDS': 'RDS',
+      'AmazonS3': 'S3',
+      'AWSGlue': 'Glue',
+      'awskms': 'KMS',
+      'AWSSecretsManager': 'SecretsManager',
+      'AmazonRoute53': 'Route53',
+      'AmazonCloudWatch': 'CloudWatch',
+      'AmazonAthena': 'Athena',
+      'AmazonECR': 'ECR',
+      // Add more mappings as necessary
+    };
   }
 
   async getCredentials() {
@@ -118,14 +135,8 @@ export class CostService {
           rows.push(obj);
         }
       } else if (rsRows.length > 0) {
-        // subsequent pages may or may not repeat header - safer to parse using first page header saved earlier
-        // But GetQueryResults does not return header on subsequent pages - we'll assume header already captured.
-        // We'll fetch header from the initial page by re-fetching first page if needed.
-        // Simpler approach: fetch the header once from the first page above. Here we assume 'rows' already started.
         const header = Object.keys(rows[0] || {});
-        // If rows is empty and we didn't capture header, attempt simple fallback:
         if (!header.length) {
-          // fallback to positional mapping like col0, col1...
           for (let i = 0; i < rsRows.length; i++) {
             const dataRow = rsRows[i].Data.map(d => (d.VarCharValue || null));
             const obj = {};
@@ -133,7 +144,6 @@ export class CostService {
             rows.push(obj);
           }
         } else {
-          // map by header positions
           for (let i = 0; i < rsRows.length; i++) {
             const dataRow = rsRows[i].Data.map(d => (d.VarCharValue || null));
             const obj = {};
@@ -145,16 +155,17 @@ export class CostService {
       nextToken = resultsRes.NextToken;
     } while (nextToken);
 
-    // convert numeric-looking fields to numbers where applicable
+    // Parse numeric-looking fields, including scientific notation.
     return rows.map(r => {
       const converted = {};
       for (const k of Object.keys(r)) {
         const v = r[k];
         if (v === null) { converted[k] = null; continue; }
-        // try to detect integers and floats
-        if (/^-?\d+$/.test(v)) converted[k] = parseInt(v, 10);
-        else if (/^-?\d+\.\d+(e[-+]?\d+)?$/i.test(v) || /^-?\d+e[-+]?\d+$/i.test(v)) converted[k] = Number(v);
-        else converted[k] = v;
+        if (/^-?\d+(\.\d+)?(E[-+]?\d+)?$/i.test(v)) {
+          converted[k] = Number(v);
+        } else {
+          converted[k] = v;
+        }
       }
       return converted;
     });
@@ -189,45 +200,33 @@ export class CostService {
       start.setDate(start.getDate() - 30);
       const startStr = start.toISOString().split('T')[0];
       const endStr = end.toISOString().split('T')[0];
-  
-      // UPDATED: Simple, robust query
+
       const sql = `
         SELECT
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
-          canonical_service AS service,
-          SUM(line_item_unblended_cost) AS total_cost_usd
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+          COALESCE(line_item_product_code, 'Unknown') AS service,
+          SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost_usd
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
         GROUP BY 1, 2
         ORDER BY day ASC, total_cost_usd DESC;
       `;
-  
+
       const rows = await this.runAthenaQuery(sql);
-  
-      // Map Athena service names to friendly names for the dashboard
-      const serviceNameMap = {
-        'Amazon Elastic Compute Cloud': 'EC2',
-        'Amazon Virtual Private Cloud': 'VPC',
-        'Amazon Relational Database Service': 'RDS',
-        'Amazon Simple Storage Service': 'S3',
-        // Add more mappings here to match your Cost Explorer data
-      };
-  
+
       const dayMap = {};
       rows.forEach(r => {
         const day = r.day;
         const originalService = r.service;
-        const mappedService = serviceNameMap[originalService] || originalService; // Use mapped name or original
+        const mappedService = this.serviceNameMap[originalService] || originalService; // Map product code -> friendly name
         const cost = Number(r.total_cost_usd || 0);
-        
+
         if (!dayMap[day]) dayMap[day] = {};
-        
-        // Aggregate costs for services that might map to the same name
         if (!dayMap[day][mappedService]) dayMap[day][mappedService] = 0;
         dayMap[day][mappedService] += cost;
       });
-  
+
       // Convert the data to the final format for the frontend
       const dailyData = Object.keys(dayMap).sort().map(day => {
         const groups = Object.keys(dayMap[day]).map(service => ({
@@ -239,7 +238,7 @@ export class CostService {
           Groups: groups
         };
       });
-  
+
       return dailyData;
     } catch (err) {
         console.error('❌ getDailyCostData failed:', err.message || err);
@@ -250,14 +249,11 @@ export class CostService {
   // weekly: aggregate the last 12 weeks of daily data into weeks of 7 days
   async getWeeklyCostData() {
     try {
-      // reuse daily data then bucket into 7-day windows
       const daily = await this.getDailyCostData();
-      // transform into weeks (sliding by 7 from the start)
       const chunks = [];
       for (let i = 0; i < daily.length; i += 7) {
         const week = daily.slice(i, i + 7);
         if (week.length === 0) continue;
-        // sum per service across the week
         const svcSums = {};
         week.forEach(day => {
           day.Groups?.forEach(g => {
@@ -293,8 +289,8 @@ export class CostService {
 
       const sql = `
         SELECT date_format(line_item_usage_start_date, '%Y-%m') AS month,
-               SUM(cost_cents) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+               SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS cost
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
         GROUP BY date_format(line_item_usage_start_date, '%Y-%m')
@@ -303,7 +299,7 @@ export class CostService {
       const rows = await this.runAthenaQuery(sql);
       return rows.map(r => {
         const monthLabel = r.month;
-        const cost = Number(r.cost_cents || 0) / 100;
+        const cost = Number(r.cost || 0); // Use the cost directly
         return { month: monthLabel, cost, period: monthLabel };
       });
     } catch (err) {
@@ -315,16 +311,15 @@ export class CostService {
   async getTotalMonthlyCost() {
     try {
       const { Start, End } = this.getDateRange(1); // current month from 1st to today
-      // Use date range inclusive of today
       const sql = `
-        SELECT SUM(cost_cents) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        SELECT SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}';
       `;
       const rows = await this.runAthenaQuery(sql);
-      const cents = (rows[0] && rows[0].cost_cents) ? Number(rows[0].cost_cents) : 0;
-      return Number((cents / 100).toFixed(2));
+      const cost = (rows[0] && rows[0].total_cost) ? Number(rows[0].total_cost) : 0;
+      return Number(cost.toFixed(2));
     } catch (err) {
       console.error('❌ getTotalMonthlyCost failed:', err);
       throw err;
@@ -334,21 +329,20 @@ export class CostService {
   async getServiceCosts() {
     try {
       const { Start, End } = this.getDateRange(1);
-      // group by canonical service and region (product_location)
       const sql = `
-        SELECT canonical_service AS service,
+        SELECT COALESCE(line_item_product_code, 'Unknown') AS service,
                product_location AS region,
-               SUM(cost_cents) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+               SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}'
-        GROUP BY canonical_service, product_location
-        ORDER BY cost_cents DESC
+        GROUP BY COALESCE(line_item_product_code, 'Unknown'), product_location
+        ORDER BY total_cost DESC
         LIMIT 500;
       `;
       const rows = await this.runAthenaQuery(sql);
       return rows
-        .map(r => ({ service: r.service || 'Unknown', region: r.region || 'NoRegion', cost: Number(r.cost_cents || 0) / 100 }))
+        .map(r => ({ service: this.serviceNameMap[r.service] || r.service || 'Unknown', region: r.region || 'NoRegion', cost: Number(r.total_cost || 0) }))
         .filter(x => x.cost > 0)
         .sort((a,b) => b.cost - a.cost);
     } catch (err) {
@@ -361,17 +355,23 @@ export class CostService {
     try {
       const { Start, End } = this.getDateRange(1);
       const sql = `
-        SELECT product_location AS region,
-               SUM(cost_cents) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        SELECT
+          CASE
+            WHEN product_location IS NULL OR trim(product_location) = '' THEN 'Global'
+            WHEN lower(product_location) IN ('any','(any)','unknown') THEN 'Global'
+            ELSE product_location
+          END AS region,
+          SUM(COALESCE(amortized_cost, line_item_unblended_cost, 0)) AS total_cost
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}'
-        GROUP BY product_location
-        ORDER BY cost_cents DESC;
+        GROUP BY 1
+        ORDER BY total_cost DESC;
       `;
+  
       const rows = await this.runAthenaQuery(sql);
       return rows
-        .map(r => ({ region: r.region || 'Unknown', cost: Number(r.cost_cents || 0) / 100 }))
+        .map(r => ({ region: r.region || 'Global', cost: Number(r.total_cost || 0) }))
         .filter(x => x.cost > 0);
     } catch (err) {
       console.error('❌ getRegionCosts failed:', err);
@@ -393,7 +393,7 @@ export class CostService {
       } else {
         ({ Start, End } = this.getDateRange(1, { fullMonth }));
       }
-  
+
       const sql = `
         SELECT owner_tag, total_usd, total_cents, resource_count
         FROM (
@@ -401,14 +401,13 @@ export class CostService {
             COALESCE(
               NULLIF(TRIM(resource_tags['user_owner']), '')
             ) AS owner_tag,
-            SUM(cost_usd) AS total_usd,
-            SUM(cost_cents) AS total_cents,
+            SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_usd,
+            SUM( CAST(ROUND(COALESCE(amortized_cost, line_item_unblended_cost, 0) * 100, 0) AS BIGINT) ) AS total_cents,
             COUNT(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resource_count
-          FROM ${this.athenaDatabase}.cur_canonical_services_v1
+          FROM ${this.athenaDatabase}.cur_daily_v1
           WHERE date(line_item_usage_start_date) >= DATE '${Start}'
             AND date(line_item_usage_start_date) <= DATE '${End}'
-            AND line_item_unblended_cost IS NOT NULL
-            AND line_item_unblended_cost <> 0
+            AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
           GROUP BY
             COALESCE(
               NULLIF(TRIM(resource_tags['user_owner']), '')
@@ -418,11 +417,11 @@ export class CostService {
         ORDER BY total_cents DESC
         LIMIT 500;
       `;
-  
+
       console.log('getUserCosts SQL:\n', sql);
       const rows = await this.runAthenaQuery(sql);
       console.log('getUserCosts - sample rows:', rows.slice(0, 8));
-  
+
       return rows.map(r => ({
         user: r.owner_tag,
         cost: Number(r.total_usd || 0),
@@ -438,64 +437,60 @@ export class CostService {
   // resource costs: daily trend for services (uses Athena for cost trend + Resource Groups for counts)
   async getResourceCosts() {
     try {
-      console.log('🔍 Validating resource data from Athena...');
+      console.log('🔍 Fetching daily resource cost data from Athena...');
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - 30);
       const startStr = start.toISOString().split('T')[0];
       const endStr = end.toISOString().split('T')[0];
-  
+
       const sql = `
         SELECT
-          canonical_service AS service,
+          COALESCE(line_item_product_code, 'Unknown') AS service,
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
-          SUM(cost_cents) AS cost_cents,
+          SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS daily_cost,
           COUNT(DISTINCT line_item_resource_id) AS resource_count
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE
           date(line_item_usage_start_date) >= DATE '${startStr}' AND
           date(line_item_usage_start_date) <= DATE '${endStr}' AND
           line_item_resource_id IS NOT NULL AND
-          canonical_service IS NOT NULL
+          COALESCE(line_item_product_code, '') <> ''
         GROUP BY
-          canonical_service,
+          COALESCE(line_item_product_code, 'Unknown'),
           date_format(line_item_usage_start_date, '%Y-%m-%d')
         ORDER BY
           service, day;
       `;
-      
+
       const rows = await this.runAthenaQuery(sql);
-  
-      // Convert to structure: service -> dailyTrend array and total
-      const svcMap = {};
+
+      const serviceMap = {};
       const uniqueDays = [...new Set(rows.map(r => r.day))].sort();
-  
+
       rows.forEach(r => {
-        const s = r.service || 'Unknown';
-        if (!svcMap[s]) svcMap[s] = {
-          type: s,
-          dailyTrend: uniqueDays.map(_ => 0),
-          cost: 0,
-          count: 0
-        };
-        
+        const s = this.serviceNameMap[r.service] || r.service || 'Unknown';
+        if (!serviceMap[s]) {
+          serviceMap[s] = {
+            type: s,
+            dailyTrend: uniqueDays.map(() => 0),
+            cost: 0,
+            count: 0
+          };
+        }
+
         const dayIndex = uniqueDays.indexOf(r.day);
-        const dollars = Number(r.cost_cents || 0) / 100;
-        svcMap[s].dailyTrend[dayIndex] = dollars;
-        svcMap[s].cost += dollars;
-        
-        // We will sum the count for each day to get a total for the month,
-        // as resource IDs might appear on multiple days.
-        svcMap[s].count += Number(r.resource_count || 0);
+        const dollars = Number(r.daily_cost || 0);
+        serviceMap[s].dailyTrend[dayIndex] = dollars;
+        serviceMap[s].cost += dollars;
+        serviceMap[s].count += Number(r.resource_count || 0);
       });
-  
-      const results = Object.values(svcMap).map(item => ({
+
+      const results = Object.values(serviceMap).map(item => ({
         ...item,
-        // Use the daily trend array
         trend: item.dailyTrend
       }));
-  
-      // Sort by total cost and return the top 10
+
       return results.sort((a, b) => b.cost - a.cost).slice(0, 10);
     } catch (err) {
       console.error('❌ getResourceCosts failed:', err);
@@ -516,31 +511,30 @@ export class CostService {
       } else {
         ({ Start, End } = this.getDateRange(1, { fullMonth }));
       }
-  
+
       const sql = `
         SELECT project_tag, total_usd, total_cents, resource_count
         FROM (
           SELECT
             COALESCE(NULLIF(TRIM(resource_tags['user_project']), '')) AS project_tag,
-            SUM(cost_usd) AS total_usd,
-            SUM(cost_cents) AS total_cents,
+            SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_usd,
+            SUM( CAST(ROUND(COALESCE(amortized_cost, line_item_unblended_cost, 0) * 100, 0) AS BIGINT) ) AS total_cents,
             COUNT(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resource_count
-          FROM ${this.athenaDatabase}.cur_canonical_services_v1
+          FROM ${this.athenaDatabase}.cur_daily_v1
           WHERE date(line_item_usage_start_date) >= DATE '${Start}'
             AND date(line_item_usage_start_date) <= DATE '${End}'
-            AND line_item_unblended_cost IS NOT NULL
-            AND line_item_unblended_cost <> 0
+            AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
           GROUP BY COALESCE(NULLIF(TRIM(resource_tags['user_project']), ''))
         ) t
         WHERE project_tag IS NOT NULL
         ORDER BY total_cents DESC
         LIMIT 500;
       `;
-  
+
       console.log('getProjectCosts SQL:\n', sql);
       const rows = await this.runAthenaQuery(sql);
       console.log('getProjectCosts - sample rows:', rows.slice(0, 8));
-  
+
       return rows.map(r => ({
         project: r.project_tag,
         cost: Number(r.total_usd || 0),
@@ -554,8 +548,6 @@ export class CostService {
   }
 
   estimateResourcesCost(resources) {
-    // This function is now deprecated as we'll get actual costs from CUR.
-    // However, if you have other uses for it, you can keep it.
     let totalCost = 0;
     resources.forEach(resource => {
       const resourceType = resource.ResourceARN?.split(':')[2];
@@ -580,41 +572,48 @@ export class CostService {
     try {
       console.log(`🔍 Fetching resource details for: ${serviceName} from Athena.`);
       const { Start, End } = this.getDateRange(1);
+
+      // Build candidate product codes list: serviceName might be friendly or a product code.
+      const candidateCodes = new Set();
+      candidateCodes.add(serviceName);
+      // If serviceName matches a friendly name, add product codes mapping
+      for (const [code, friendly] of Object.entries(this.serviceNameMap)) {
+        if (friendly.toLowerCase() === String(serviceName).toLowerCase()) candidateCodes.add(code);
+      }
+      const codesArr = Array.from(candidateCodes).map(c => `'${String(c).replace("'", "\\'")}'`).join(',');
+
       const sql = `
         SELECT
             line_item_resource_id,
-            canonical_service,
+            COALESCE(line_item_product_code, 'Unknown') AS product_code,
             product_location,
-            SUM(line_item_unblended_cost) AS total_cost
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+            SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
             AND date(line_item_usage_start_date) <= DATE '${End}'
-            AND canonical_service = '${serviceName}'
             AND line_item_resource_id IS NOT NULL
+            AND COALESCE(line_item_product_code, 'Unknown') IN (${codesArr})
         GROUP BY
             line_item_resource_id,
-            canonical_service,
+            COALESCE(line_item_product_code, 'Unknown'),
             product_location
         ORDER BY
             total_cost DESC;
       `;
-      
+
       const rows = await this.runAthenaQuery(sql);
 
       const formattedResources = rows.map(r => ({
         id: r.line_item_resource_id,
         name: r.line_item_resource_id,
-        type: r.canonical_service,
+        type: this.serviceNameMap[r.product_code] || r.product_code,
         region: r.product_location || 'unknown',
-        // Note: Owner and Project tags would require a slightly more complex query
-        // to extract from the 'resource_tags' column if needed, but for now
-        // let's use placeholders as an example.
         owner: 'Unknown (from CUR)',
         project: 'Unassigned (from CUR)',
         createdDate: 'N/A',
         status: 'Active',
-        cost: Number(r.total_cost),
-        tags: [], // Tags can be extracted with a more complex query if needed
+        cost: Number(r.total_cost || 0),
+        tags: [],
         specifications: {},
       }));
 
