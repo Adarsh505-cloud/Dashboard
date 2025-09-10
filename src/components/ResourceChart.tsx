@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// ResourceChart.tsx (updated — TopSpendingResources moved inline)
+import React, { useState, useEffect, useRef } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -27,21 +28,23 @@ import {
   HardDrive,
   Globe,
   DollarSign,
-  CheckCircle
+  CheckCircle,
+  MapPin
 } from 'lucide-react';
 
 ChartJS.register(
-  CategoryScale, 
-  LinearScale, 
-  PointElement, 
-  LineElement, 
-  BarElement, 
-  ArcElement, 
-  Title, 
-  Tooltip, 
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
   Legend
 );
 
+// ------- Interfaces -------
 interface ResourceCost {
   type: string;
   cost: number;
@@ -75,10 +78,18 @@ interface WeeklyCostData {
   Groups?: DailyCostGroup[];
 }
 
+interface TopSpendingResource {
+  service: string;
+  resource_type: string;
+  resource_id: string;
+  total_cost: number;
+}
+
 interface ResourceChartProps {
   data: ResourceCost[];
   dailyCostData?: DailyCostData[];
   weeklyCostData?: WeeklyCostData[];
+  topSpendingResources?: TopSpendingResource[]; // NEW optional prop
 }
 
 interface ProcessedCostData {
@@ -86,71 +97,68 @@ interface ProcessedCostData {
   labels: string[];
 }
 
-const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, weeklyCostData }) => {
+// ------- Component -------
+const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, weeklyCostData, topSpendingResources }) => {
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [chartType, setChartType] = useState<'line' | 'bar' | 'doughnut'>('line');
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
 
-  // Process real AWS daily cost data
+  // Process real cost data (unchanged)
   const processRealCostData = (range: 'daily' | 'weekly' | 'monthly'): ProcessedCostData => {
     if (range === 'daily' && dailyCostData) {
       console.log('📊 Using real daily cost data from AWS Cost Explorer');
-      
-      // Process daily data by service
       const serviceData: Record<string, number[]> = {};
       const labels: string[] = [];
-      
+
       dailyCostData.forEach((dayData, index) => {
         const date = new Date(dayData.TimePeriod.Start);
         labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        
+
         dayData.Groups?.forEach((group: DailyCostGroup) => {
           const service = group.Keys?.[0] || 'Unknown';
           const cost = parseFloat(group.Metrics?.BlendedCost?.Amount || '0');
-          
+
           if (!serviceData[service]) {
             serviceData[service] = new Array(dailyCostData.length).fill(0);
           }
           serviceData[service][index] = cost;
         });
       });
-      
+
       return { serviceData, labels };
     }
-    
+
     if (range === 'weekly' && weeklyCostData) {
       console.log('📊 Using real weekly cost data from AWS Cost Explorer');
-      
-      // Process weekly data by service
       const serviceData: Record<string, number[]> = {};
       const labels: string[] = [];
-      
+
       weeklyCostData.forEach((weekData, index) => {
         const startDate = new Date(weekData.TimePeriod.Start);
         labels.push(`Week ${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`);
-        
+
         weekData.Groups?.forEach((group: DailyCostGroup) => {
           const service = group.Keys?.[0] || 'Unknown';
           const cost = parseFloat(group.Metrics?.BlendedCost?.Amount || '0');
-          
+
           if (!serviceData[service]) {
             serviceData[service] = new Array(weeklyCostData.length).fill(0);
           }
           serviceData[service][index] = cost;
         });
       });
-      
+
       return { serviceData, labels };
     }
-    
-    // Fallback to monthly trend data
+
+    // Fallback monthly data (unchanged)
     const serviceData: Record<string, number[]> = {};
     const labels = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     data.forEach(resource => {
       serviceData[resource.type] = resource.trend || new Array(6).fill(0);
     });
-    
+
     return { serviceData, labels };
   };
 
@@ -162,10 +170,26 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   // Filter out resources with zero cost or count
   const validResources = data.filter(resource => resource.cost > 0 && resource.count > 0);
 
-  // Get processed cost data
+  // Processed cost & labels
   const { serviceData, labels } = processRealCostData(timeRange);
 
-  // Prepare chart data based on selected chart type
+  // Top10 from resource-level summary (fallback)
+  const top10ResourcesFallback = [...validResources]
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, 10)
+    .map(r => ({
+      service: r.type,
+      resource_type: r.type,
+      resource_id: r.type,
+      total_cost: r.cost
+    })) as TopSpendingResource[];
+
+  // Use provided topSpendingResources if present, otherwise fallback
+  const top10 = Array.isArray(topSpendingResources) && topSpendingResources.length > 0
+    ? topSpendingResources.slice(0, 10)
+    : top10ResourcesFallback;
+
+  // Chart data (unchanged use elsewhere)
   const getChartData = () => {
     if (chartType === 'doughnut') {
       return {
@@ -182,17 +206,14 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       };
     }
 
-    // Line or Bar chart - use real AWS data
     const datasets = Object.entries(serviceData)
       .filter(([, costs]) => {
-        // Only include services that have meaningful cost data
         const totalCost = Array.isArray(costs) ? costs.reduce((sum: number, cost: number) => sum + cost, 0) : 0;
         return totalCost > 0;
       })
-      .slice(0, 8) // Limit to top 8 services for readability
+      .slice(0, 8)
       .map(([service, costs], index) => {
         const serviceName = service.replace('Amazon ', '').replace(' Service', '');
-        
         if (chartType === 'bar') {
           return {
             label: serviceName,
@@ -239,7 +260,6 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
             usePointStyle: true,
             pointStyle: 'circle' as const,
             filter: (legendItem: any, chartData: any) => {
-              // Limit legend items to prevent overcrowding
               return chartData.datasets.indexOf(chartData.datasets.find((d: any) => d.label === legendItem.text)) < 8;
             }
           },
@@ -321,7 +341,6 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const totalCost = validResources.reduce((sum, resource) => sum + resource.cost, 0);
   const totalResources = validResources.reduce((sum, resource) => sum + resource.count, 0);
 
-  // Calculate trend for each resource
   const getResourceTrend = (trend: number[]) => {
     if (trend.length < 2) return 0;
     const recent = trend.slice(-2);
@@ -353,15 +372,16 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
     }
   };
 
-  const getResourceIcon = (type: string) => {
-    if (type.includes('EC2') || type.includes('Instance') || type.includes('Compute')) return <Server className="w-5 h-5" />;
-    if (type.includes('RDS') || type.includes('Database')) return <Database className="w-5 h-5" />;
-    if (type.includes('S3') || type.includes('Storage')) return <HardDrive className="w-5 h-5" />;
-    if (type.includes('Lambda') || type.includes('Function')) return <Zap className="w-5 h-5" />;
+  const getResourceIcon = (serviceOrType: string) => {
+    const s = (serviceOrType || '').toLowerCase();
+    if (s.includes('ec2') || s.includes('instance') || s.includes('compute')) return <Server className="w-5 h-5" />;
+    if (s.includes('rds') || s.includes('database')) return <Database className="w-5 h-5" />;
+    if (s.includes('s3') || s.includes('storage')) return <HardDrive className="w-5 h-5" />;
+    if (s.includes('lambda') || s.includes('function')) return <Zap className="w-5 h-5" />;
+    if (s.includes('vpc')) return <MapPin className="w-5 h-5" />;
     return <Activity className="w-5 h-5" />;
   };
 
-  // Calculate daily cost range from real data
   const getDailyCostRange = () => {
     if (timeRange === 'daily' && chartData.datasets.length > 0) {
       const allCosts = chartData.datasets.flatMap(dataset => dataset.data as number[]);
@@ -374,6 +394,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
 
   const costRange = getDailyCostRange();
 
+  // If no resources, preserve the original "no data" UI
   if (validResources.length === 0) {
     return (
       <div className="space-y-8">
@@ -426,7 +447,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
 
   return (
     <div className="space-y-8">
-      {/* Header Section */}
+      {/* Header (unchanged) */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-3xl p-8 text-white">
         <div className="flex items-center gap-4 mb-4">
           <div className="p-3 bg-white/20 rounded-2xl">
@@ -453,7 +474,56 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
         </div>
       </div>
 
-      {/* Real Data Indicator */}
+      {/* REPLACED: Top 10 Chart --> Top 10 Table (integrated from TopSpendingResources) */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+        <h3 className="text-xl font-semibold text-gray-900 mb-4">Top Spending Resources (Last 30 Days)</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Resource
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Resource Type
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Cost
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {top10.map((resource, index) => (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-lg">
+                        {getResourceIcon(resource.service || resource.resource_type || '')}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900 truncate" style={{ maxWidth: '20rem' }}>
+                          {resource.resource_id || resource.service}
+                        </div>
+                        <div className="text-xs text-gray-500">{resource.service}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                      {resource.resource_type}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
+                    ${Number(resource.total_cost || 0).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Controls, main chart and details (unchanged) */}
       <div className="bg-green-50 border border-green-200 rounded-xl p-4">
         <div className="flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-green-600" />
@@ -619,16 +689,16 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
           <div className="text-sm text-green-800">
             <strong>✅ Real AWS Data:</strong> 
             {timeRange === 'daily' && dailyCostData ? 
-              ` Daily costs fetched directly from AWS Cost Explorer API (${dailyCostData.length} days of actual billing data from ${dailyCostData.length > 0 ? new Date(dailyCostData[0].TimePeriod.Start).toLocaleDateString() : 'N/A'}).` :
+              ` Daily costs fetched directly from AWS Cost Explorer (${dailyCostData.length} days of actual billing data from ${dailyCostData.length > 0 ? new Date(dailyCostData[0].TimePeriod.Start).toLocaleDateString() : 'N/A'}).` :
               timeRange === 'weekly' && weeklyCostData ?
-              ` Weekly costs aggregated from AWS Cost Explorer API (${weeklyCostData.length} weeks of actual billing data from ${weeklyCostData.length > 0 ? new Date(weeklyCostData[0].TimePeriod.Start).toLocaleDateString() : 'N/A'}).` :
+              ` Weekly costs aggregated from AWS Cost Explorer (${weeklyCostData.length} weeks of actual billing data from ${weeklyCostData.length > 0 ? new Date(weeklyCostData[0].TimePeriod.Start).toLocaleDateString() : 'N/A'}).` :
               ' Monthly cost trends from your AWS Cost Explorer data.'
             }
           </div>
         </div>
       </div>
 
-      {/* Resource Details */}
+      {/* Resource Details (unchanged) */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-6">Resource Type Details</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -758,6 +828,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
           })}
         </div>
       </div>
+
     </div>
   );
 };

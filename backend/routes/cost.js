@@ -6,6 +6,7 @@ import { RecommendationService } from '../services/recommendationService.js';
 const router = express.Router();
 
 // Get comprehensive cost analysis
+// Get comprehensive cost analysis
 router.post('/analysis', validateCredentials, async (req, res, next) => {
   try {
     const { accountId, roleArn } = req.body;
@@ -13,7 +14,22 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
     const costService = new CostService(accountId, roleArn);
     const recommendationService = new RecommendationService(accountId, roleArn);
     
-    // Fetch all cost data in parallel (re-add getTotalMonthlyCost)
+    // Fetch all cost data in parallel (we collect results array to be robust)
+    const results = await Promise.all([
+      costService.getTotalMonthlyCost(),   // 0
+      costService.getServiceCosts(),       // 1
+      costService.getRegionCosts(),        // 2
+      costService.getUserCosts(),          // 3
+      costService.getResourceCosts(),      // 4
+      costService.getProjectCosts(),       // 5
+      recommendationService.getRecommendations(), // 6
+      costService.getCostTrendData(),      // 7
+      costService.getDailyCostData(),      // 8
+      costService.getWeeklyCostData(),     // 9
+      costService.getTopSpendingResources()// 10  <-- ensure we capture this
+    ]);
+
+    // Destructure and provide safe defaults where useful
     const [
       totalCost,
       serviceCosts,
@@ -24,33 +40,26 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
       recommendations,
       costTrendData,
       dailyCostData,
-      weeklyCostData
-    ] = await Promise.all([
-      costService.getTotalMonthlyCost(), // Re-add this line
-      costService.getServiceCosts(),
-      costService.getRegionCosts(),
-      costService.getUserCosts(),
-      costService.getResourceCosts(),
-      costService.getProjectCosts(),
-      recommendationService.getRecommendations(),
-      costService.getCostTrendData(),
-      costService.getDailyCostData(),
-      costService.getWeeklyCostData()
-    ]);
+      weeklyCostData,
+      topSpendingResourcesRaw
+    ] = results;
+
+    const topSpendingResources = Array.isArray(topSpendingResourcesRaw) ? topSpendingResourcesRaw : [];
 
     res.json({
       success: true,
       data: {
-        totalMonthlyCost: totalCost, // Use the value from the direct call
-        serviceCosts,
-        regionCosts,
-        userCosts,
-        resourceCosts,
-        projectCosts,
-        recommendations,
-        costTrendData,
-        dailyCostData,
-        weeklyCostData
+        totalMonthlyCost: totalCost != null ? totalCost : 0,
+        serviceCosts: serviceCosts || [],
+        regionCosts: regionCosts || [],
+        userCosts: userCosts || [],
+        resourceCosts: resourceCosts || [],
+        projectCosts: projectCosts || [],
+        recommendations: recommendations || [],
+        costTrendData: costTrendData || [],
+        dailyCostData: dailyCostData || [],
+        weeklyCostData: weeklyCostData || [],
+        topSpendingResources
       },
       timestamp: new Date().toISOString()
     });
