@@ -1,11 +1,11 @@
 import React from 'react';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  Globe, 
-  Server, 
-  Users, 
+import {
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Globe,
+  Server,
+  Users,
   FolderOpen,
   AlertTriangle,
   Activity,
@@ -24,18 +24,18 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
+// MODIFIED: This interface now expects daily data for costTrendData
 interface CostTrendData {
-  month: string;
+  date: string;
   cost: number;
-  period: {
-    Start: string;
-    End: string;
-  };
 }
+
+// NOTE: removed TopSpendingResource interface (we no longer render the table here)
 
 interface OverviewData {
   totalMonthlyCost: number;
@@ -51,6 +51,7 @@ interface OverviewData {
     potentialSavings: number;
   }>;
   costTrendData?: CostTrendData[];
+  // removed topSpendingResources from OverviewData
 }
 
 interface OverviewDashboardProps {
@@ -60,7 +61,7 @@ interface OverviewDashboardProps {
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
   // Filter out regions with zero cost
   const filteredRegionCosts = data.regionCosts.filter(region => region.cost > 0);
-  
+
   // Calculate metrics
   const totalPotentialSavings = data.recommendations.reduce((sum, rec) => sum + rec.potentialSavings, 0);
   const highPriorityRecommendations = data.recommendations.filter(rec => rec.severity === 'high').length;
@@ -107,7 +108,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
     const currentDay = now.getDate();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const monthProgress = (currentDay / daysInMonth) * 100;
-    
+
     return {
       currentDay,
       daysInMonth,
@@ -121,25 +122,24 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
   // Calculate actual trend percentage from real data
   const calculateActualTrend = () => {
     if (data.costTrendData && data.costTrendData.length >= 2) {
-      const currentMonth = data.costTrendData[data.costTrendData.length - 1];
-      const previousMonth = data.costTrendData[data.costTrendData.length - 2];
-      
-      if (previousMonth.cost > 0) {
-        // Calculate trend based on actual monthly costs
-        const trend = ((currentMonth.cost - previousMonth.cost) / previousMonth.cost) * 100;
+      const todayCost = data.costTrendData[data.costTrendData.length - 1]?.cost || 0;
+      const yesterdayCost = data.costTrendData[data.costTrendData.length - 2]?.cost || 0;
+
+      if (yesterdayCost > 0) {
+        const trend = ((todayCost - yesterdayCost) / yesterdayCost) * 100;
         return {
           percentage: trend,
           isProjected: false,
-          comparison: `vs ${previousMonth.month}`
+          comparison: `vs yesterday`
         };
       }
     }
-    
-    // Fallback calculation based on service costs growth pattern
+
+    // Fallback calculation
     const totalCurrentCost = data.totalMonthlyCost;
     const estimatedPreviousMonth = totalCurrentCost * 0.89; // Assume 11% growth
     const trend = ((totalCurrentCost - estimatedPreviousMonth) / estimatedPreviousMonth) * 100;
-    
+
     return {
       percentage: trend,
       isProjected: false,
@@ -149,59 +149,40 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
 
   const trendInfo = calculateActualTrend();
 
-  // Cost trend data - use real AWS data if available
+  // MODIFIED: Cost trend data now uses daily data
   const trendData = React.useMemo(() => {
     if (data.costTrendData && data.costTrendData.length > 0) {
-      // Use real AWS Cost Explorer data
+      // Use real AWS Athena daily data
       return {
-        labels: data.costTrendData.map(item => item.month),
+        labels: data.costTrendData.map(item => new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
         datasets: [
           {
-            label: 'Monthly Cost',
+            label: 'Daily Cost',
             data: data.costTrendData.map(item => item.cost),
             borderColor: '#3B82F6',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             borderWidth: 3,
-            pointRadius: 6,
-            pointHoverRadius: 8,
+            pointRadius: 2,
+            pointHoverRadius: 6,
             tension: 0.4,
             fill: true,
           },
         ],
       };
     } else {
-      // Fallback to estimated data
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      const currentCost = data.totalMonthlyCost;
-      
-      // Generate realistic trend based on current cost
-      const trendCosts = months.map((_, index) => {
-        const variation = (Math.random() - 0.5) * 0.3; // ±15% variation
-        const baseCost = currentCost * (0.7 + (index / months.length) * 0.6); // Growth trend
-        return Math.max(0, baseCost * (1 + variation));
-      });
-      
-      // Ensure the last value matches current cost
-      trendCosts[trendCosts.length - 1] = currentCost;
-      
+      // Fallback to estimated data if no data is available
       return {
-        labels: months,
+        labels: ['No Data'],
         datasets: [
           {
-            label: 'Monthly Cost',
-            data: trendCosts,
-            borderColor: '#3B82F6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            borderWidth: 3,
-            pointRadius: 6,
-            pointHoverRadius: 8,
-            tension: 0.4,
-            fill: true,
+            label: 'Daily Cost',
+            data: [0],
           },
         ],
       };
     }
-  }, [data.costTrendData, data.totalMonthlyCost]);
+  }, [data.costTrendData]);
+
 
   const chartOptions = {
     responsive: true,
@@ -230,7 +211,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
       },
       tooltip: {
         callbacks: {
-          label: (context: any) => `$${context.parsed.y.toLocaleString()}`,
+          label: (context: any) => `$${context.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         },
       },
     },
@@ -330,13 +311,13 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Cost Trend */}
+        {/* MODIFIED: Cost Trend Chart */}
         <div className="xl:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Cost Trend</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Cost Trend (Last 30 Days)</h3>
               <p className="text-gray-500">
-                {data.costTrendData ? 'Real AWS Cost Explorer data' : 'Monthly spending over time'}
+                Daily spending over the last 30 days from AWS CUR
               </p>
             </div>
             <div className="p-2 bg-blue-100 rounded-lg">
@@ -349,10 +330,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
           <div className="mt-4 flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-gray-600">Monthly Cost</span>
+              <span className="text-gray-600">Daily Cost</span>
             </div>
             <div className="text-gray-500">
-              {data.costTrendData ? 'AWS Cost Explorer' : 'Last 6 months'}
+              {data.costTrendData ? 'Last 30 days from Athena' : 'Last 6 months'}
             </div>
           </div>
           {data.costTrendData && (
@@ -361,6 +342,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
             </div>
           )}
         </div>
+
 
         {/* Top Services */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
@@ -514,6 +496,9 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
           </div>
         </div>
       </div>
+
+      {/* NOTE: TopSpendingResources removed from Overview page */}
+
     </div>
   );
 };

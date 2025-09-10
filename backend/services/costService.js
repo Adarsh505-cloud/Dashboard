@@ -277,29 +277,30 @@ export class CostService {
     }
   }
 
-  // monthly trend for past 6 months
+  // MODIFIED: Fetches daily cost for the past 30 days for the overview chart
   async getCostTrendData() {
     try {
       const end = new Date();
       const start = new Date();
-      start.setMonth(start.getMonth() - 6);
-      start.setDate(1);
+      start.setDate(start.getDate() - 30);
       const startStr = start.toISOString().split('T')[0];
       const endStr = end.toISOString().split('T')[0];
 
       const sql = `
         SELECT date_format(line_item_usage_start_date, '%Y-%m') AS month,
-               SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS cost
-        FROM ${this.athenaDatabase}.cur_daily_v1
+               SUM(cost_cents) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_canonical_services_v1
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
-        GROUP BY date_format(line_item_usage_start_date, '%Y-%m')
-        ORDER BY month ASC;
+        GROUP BY
+          date_format(line_item_usage_start_date, '%Y-%m-%d')
+        ORDER BY
+          day ASC;
       `;
       const rows = await this.runAthenaQuery(sql);
       return rows.map(r => {
         const monthLabel = r.month;
-        const cost = Number(r.cost || 0); // Use the cost directly
+        const cost = Number(r.cost_cents || 0) / 100;
         return { month: monthLabel, cost, period: monthLabel };
       });
     } catch (err) {
@@ -622,6 +623,50 @@ export class CostService {
     } catch (err) {
       console.error(`❌ getResourcesForService failed for ${serviceName}:`, err.message || err);
       throw err;
+    }
+  }
+
+  // ADD THIS NEW FUNCTION TO THE END OF THE CostService CLASS
+  async getTopSpendingResources() {
+    try {
+      const sql = `
+        SELECT
+            COALESCE(line_item_product_code, 'Unknown') AS service,
+            CASE
+                WHEN strpos(line_item_resource_id, ':') > 0 THEN
+                    split_part(split_part(line_item_resource_id, ':', 6), '/', 1)
+                WHEN line_item_resource_id LIKE 'i-%' THEN 'ec2-instance'
+                WHEN line_item_resource_id LIKE 'vol-%' THEN 'ebs-volume'
+                WHEN line_item_resource_id LIKE 'snap-%' THEN 'ebs-snapshot'
+                WHEN line_item_resource_id LIKE 'nat-%' THEN 'nat-gateway'
+                ELSE 'other'
+            END AS resource_type,
+            CASE
+                WHEN strpos(line_item_resource_id, '/') > 0 THEN
+                    split_part(line_item_resource_id, '/', 2)
+                ELSE
+                    line_item_resource_id
+            END AS resource_id,
+            SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
+        FROM "${this.athenaDatabase}".cur_daily_v1
+        WHERE date(line_item_usage_start_date) >= (current_date - interval '30' day)
+          AND line_item_resource_id IS NOT NULL
+          AND trim(line_item_resource_id) <> ''
+        GROUP BY 1, 2, 3
+        ORDER BY total_cost DESC
+        LIMIT 10;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      // normalize output shape to match frontend expected keys
+      return (rows || []).map(r => ({
+        service: r.service || 'Unknown',
+        resource_type: r.resource_type || 'other',
+        resource_id: r.resource_id || 'unknown',
+        total_cost: Number(r.total_cost || 0)
+      }));
+    } catch (err) {
+      console.error('❌ getTopSpendingResources failed:', err);
+      return [];
     }
   }
 

@@ -69,11 +69,12 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'services', label: 'Services', icon: Activity },
+    { key: 'resources', label: 'Resources', icon: Server },   // <-- moved here
     { key: 'users', label: 'Users', icon: Users },
-    { key: 'resources', label: 'Resources', icon: Server },
     { key: 'projects', label: 'Projects', icon: FolderOpen },
     { key: 'recommendations', label: 'Recommendations', icon: AlertTriangle },
   ];
+
 
   // Loading state
   if (loading) {
