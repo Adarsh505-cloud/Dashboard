@@ -287,24 +287,25 @@ export class CostService {
       const endStr = end.toISOString().split('T')[0];
 
       const sql = `
-        SELECT date_format(line_item_usage_start_date, '%Y-%m') AS month,
-               SUM(cost_cents) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_canonical_services_v1
+        SELECT
+          date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
+          SUM(CAST(ROUND(COALESCE(amortized_cost, line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS cost_cents
+        FROM ${this.athenaDatabase}.cur_daily_v1
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
-        GROUP BY
-          date_format(line_item_usage_start_date, '%Y-%m-%d')
-        ORDER BY
-          day ASC;
+        GROUP BY 1
+        ORDER BY 1 ASC;
       `;
+
+      console.log('getCostTrendData SQL:\n', sql);
       const rows = await this.runAthenaQuery(sql);
-      return rows.map(r => {
-        const monthLabel = r.month;
-        const cost = Number(r.cost_cents || 0) / 100;
-        return { month: monthLabel, cost, period: monthLabel };
-      });
+
+      return rows.map(r => ({
+        date: r.day,
+        cost: Number((Number(r.cost_cents || 0) / 100).toFixed(2))
+      }));
     } catch (err) {
-      console.error('❌ getCostTrendData failed:', err);
+      console.error('❌ getCostTrendData failed:', err.message || err);
       throw err;
     }
   }
@@ -641,18 +642,20 @@ export class CostService {
                 WHEN line_item_resource_id LIKE 'nat-%' THEN 'nat-gateway'
                 ELSE 'other'
             END AS resource_type,
-            CASE
-                WHEN strpos(line_item_resource_id, '/') > 0 THEN
-                    split_part(line_item_resource_id, '/', 2)
-                ELSE
-                    line_item_resource_id
-            END AS resource_id,
+            -- best-effort parsed id (last segment after '/'), fallback to raw id or identity_line_item_id
+            COALESCE(
+              regexp_extract(trim(line_item_resource_id), '([^/]+)$', 1),
+              NULLIF(trim(line_item_resource_id), ''),
+              identity_line_item_id
+            ) AS resource_id,
+            -- keep the raw/authoritative id so frontend always has something to show
+            COALESCE(NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS raw_resource_id,
             SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
         FROM "${this.athenaDatabase}".cur_daily_v1
         WHERE date(line_item_usage_start_date) >= (current_date - interval '30' day)
-          AND line_item_resource_id IS NOT NULL
-          AND trim(line_item_resource_id) <> ''
-        GROUP BY 1, 2, 3
+          AND (line_item_resource_id IS NOT NULL OR identity_line_item_id IS NOT NULL)
+          AND trim(COALESCE(line_item_resource_id, identity_line_item_id, '')) <> ''
+        GROUP BY 1, 2, 3, 4
         ORDER BY total_cost DESC
         LIMIT 10;
       `;
@@ -661,7 +664,9 @@ export class CostService {
       return (rows || []).map(r => ({
         service: r.service || 'Unknown',
         resource_type: r.resource_type || 'other',
-        resource_id: r.resource_id || 'unknown',
+        // prefer the parsed resource_id (short/pretty), but fall back to the raw authoritative id
+        resource_id: r.resource_id || r.raw_resource_id || 'unknown',
+        raw_resource_id: r.raw_resource_id || null,
         total_cost: Number(r.total_cost || 0)
       }));
     } catch (err) {

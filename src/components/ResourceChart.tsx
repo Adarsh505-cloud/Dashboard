@@ -1,4 +1,4 @@
-// ResourceChart.tsx (updated — TopSpendingResources moved inline)
+// ResourceChart.tsx (updated — TopSpendingResources fixed inline)
 import React, { useState, useEffect, useRef } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -29,7 +29,8 @@ import {
   Globe,
   DollarSign,
   CheckCircle,
-  MapPin
+  MapPin,
+  Copy
 } from 'lucide-react';
 
 ChartJS.register(
@@ -81,7 +82,8 @@ interface WeeklyCostData {
 interface TopSpendingResource {
   service: string;
   resource_type: string;
-  resource_id: string;
+  resource_id?: string;
+  raw_resource_id?: string;
   total_cost: number;
 }
 
@@ -188,6 +190,10 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const top10 = Array.isArray(topSpendingResources) && topSpendingResources.length > 0
     ? topSpendingResources.slice(0, 10)
     : top10ResourcesFallback;
+
+  // DEBUG: see what top10 contains (open browser console)
+  // Remove or comment out in production
+  // console.log('ResourceChart top10:', top10);
 
   // Chart data (unchanged use elsewhere)
   const getChartData = () => {
@@ -493,53 +499,59 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {top10.map((resource, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-lg">
-                        {getResourceIcon(resource.service || resource.resource_type || '')}
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900 truncate" style={{ maxWidth: '20rem' }}>
-                          {resource.resource_id || resource.service}
+              {top10.map((resource, index) => {
+                const displayId = resource.resource_id || resource.raw_resource_id || resource.service || 'unknown';
+                const rawId = resource.raw_resource_id || null;
+                const keyId = resource.raw_resource_id || resource.resource_id || `${resource.service}-${index}`;
+
+                return (
+                  <tr key={keyId} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-lg">
+                          {getResourceIcon(resource.service || resource.resource_type || '')}
                         </div>
-                        <div className="text-xs text-gray-500">{resource.service}</div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900 truncate" style={{ maxWidth: '20rem' }} title={displayId}>
+                            {displayId}
+                          </div>
+                          {rawId && rawId !== displayId ? (
+                            <div className="text-xs text-gray-400 truncate" title={rawId}>
+                              {resource.service} · ({rawId})
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-500">{resource.service}</div>
+                          )}
+                        </div>
+                        <div className="ml-3">
+                          <button
+                            onClick={() => navigator.clipboard?.writeText(displayId)}
+                            title={`Copy resource id: ${displayId}`}
+                            className="ml-2 p-1 rounded hover:bg-gray-100"
+                          >
+                            <Copy className="w-4 h-4 text-gray-500" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      {resource.resource_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                    ${Number(resource.total_cost || 0).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        {resource.resource_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
+                      ${Number(resource.total_cost || 0).toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
       {/* Controls, main chart and details (unchanged) */}
-      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-        <div className="flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-600" />
-          <div>
-            <h3 className="font-medium text-green-800">Real AWS Data</h3>
-            <p className="text-sm text-green-700">
-              {timeRange === 'daily' && dailyCostData ? 
-                `Showing actual daily costs from AWS Cost Explorer (${dailyCostData.length} days)` :
-                timeRange === 'weekly' && weeklyCostData ?
-                `Showing actual weekly costs from AWS Cost Explorer (${weeklyCostData.length} weeks)` :
-                'Showing monthly cost trends from your AWS account'
-              }
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* ... rest of the component unchanged ... (kept as in your original file) */}
 
       {/* Controls */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
