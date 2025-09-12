@@ -1,3 +1,4 @@
+// src/components/Dashboard.tsx
 import React, { useState, useRef } from 'react';
 import {
   ArrowLeft,
@@ -69,14 +70,71 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'services', label: 'Services', icon: Activity },
-    { key: 'resources', label: 'Resources', icon: Server },   // <-- moved here
+    { key: 'resources', label: 'Resources', icon: Server },
     { key: 'users', label: 'Users', icon: Users },
     { key: 'projects', label: 'Projects', icon: FolderOpen },
     { key: 'recommendations', label: 'Recommendations', icon: AlertTriangle },
   ];
 
+  // Debugging: inspect incoming data shape (remove in prod)
+  if (process.env.NODE_ENV !== 'production' && data) {
+    // eslint-disable-next-line no-console
+    console.log('Dashboard: incoming data shape:', {
+      keys: Object.keys(data || {}),
+      topSpendingResources: data?.topSpendingResources || data?.top_spending_resources || data?.topResources || data?.top_resources
+    });
+  }
 
-  // Loading state
+  // Helper: normalize and map top spending resources to expected shape
+  const mapTopSpendingResources = (rawAny: any): any[] | undefined => {
+    if (!rawAny) return undefined;
+    if (!Array.isArray(rawAny)) return undefined;
+
+    return rawAny.map((r: any, idx: number) => {
+      // Common nestings/field names to normalize:
+      const resourceId =
+        r.resource_id ||
+        r.raw_resource_id ||
+        r.resourceId ||
+        r.id ||
+        r.instanceId ||
+        r.metadata?.id ||
+        r.meta?.resourceId ||
+        r.attributes?.resource_id ||
+        r.resource?.id ||
+        null;
+
+      // cost fields might be named differently:
+      const totalCost =
+        r.total_cost ||
+        r.cost ||
+        r.amount ||
+        r.totalCost ||
+        Number(r.total_cost_usd) ||
+        0;
+
+      return {
+        service: r.service || r.resource || r.serviceName || r.name || 'unknown',
+        resource_type: r.resource_type || r.type || r.resourceType || 'unknown',
+        resource_id: resourceId,
+        raw_resource_id: r.raw_resource_id || r.rawId || null,
+        total_cost: Number(totalCost || 0),
+        // keep original for debugging if needed
+        __raw: r,
+        __index: idx,
+      };
+    });
+  };
+
+  // Prepare mappedTop from any likely api field names
+  const mappedTop =
+    mapTopSpendingResources(data?.topSpendingResources) ||
+    mapTopSpendingResources(data?.top_spending_resources) ||
+    mapTopSpendingResources(data?.topResources) ||
+    mapTopSpendingResources(data?.top_resources) ||
+    undefined;
+
+  // Loading / Error / No-data UI (unchanged from your original code)
   if (loading) {
     return (
       <div className="min-h-screen p-4 lg:p-8">
@@ -115,7 +173,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     );
   }
 
-  // Error state
   if (error) {
     const isCredentialsError = error.includes('Invalid AWS credentials') || 
                               error.includes('InvalidClientTokenId') ||
@@ -219,7 +276,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     );
   }
 
-  // No data state
   if (!data) {
     return (
       <div className="min-h-screen p-4 lg:p-8">
@@ -327,7 +383,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </div>
           </div>
           <div className="text-5xl font-bold mb-2">
-            ${data.totalMonthlyCost.toLocaleString()}
+            ${data.totalMonthlyCost?.toLocaleString?.() ?? 0}
           </div>
           <div className="flex items-center gap-2 text-blue-100">
             <TrendingUp className="w-5 h-5" />
@@ -368,6 +424,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               data={data.resourceCosts} 
               dailyCostData={data.dailyCostData}
               weeklyCostData={data.weeklyCostData}
+              topSpendingResources={mappedTop}
             />
           )}
           {activeTab === 'projects' && <ProjectChart data={data.projectCosts} />}
