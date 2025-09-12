@@ -373,6 +373,34 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
     }
   });
 
+  // Export function for resources
+  const exportResources = () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !currentUser.resourcesList) return;
+    
+    const csvRows = [];
+    const headers = ['Resource ID', 'Resource Type'];
+    csvRows.push(headers.join(','));
+    
+    currentUser.resourcesList.forEach(resource => {
+      const row = [
+        `"${resource}"`,
+        `"${getResourceType(resource)}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentUser.user.replace(/\s+/g, '_')}_resources.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
       {/* Header */}
@@ -690,7 +718,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
         </div>
       </div>
       
-      {/* Resources Modal/Panel */}
+      {/* Resources Modal/Panel - Simplified to only show available data */}
       {viewingResourcesFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -733,11 +761,10 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">
-                      <Filter className="w-4 h-4" />
-                      <span>Filter</span>
-                    </button>
-                    <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50">
+                    <button 
+                      onClick={exportResources}
+                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+                    >
                       <Download className="w-4 h-4" />
                       <span>Export</span>
                     </button>
@@ -745,7 +772,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                 </div>
               </div>
               
-              {/* Resources Table */}
+              {/* Resources Table - Simplified */}
               <div className="flex-1 overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50 sticky top-0">
@@ -769,9 +796,9 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
-                                <span className="mr-3 text-lg flex-shrink-0">{getResourceIcon(resourceType)}</span>
+                                <span className="mr-3 text-lg">{getResourceIcon(resourceType)}</span>
                                 <div className="min-w-0 flex-1">
-                                  {/* FIXED: Show full resource ARN with horizontal scroll */}
+                                  {/* Show full resource ARN with horizontal scroll */}
                                   <div className="text-sm font-medium text-gray-900 whitespace-nowrap overflow-x-auto py-1" title={resource}>
                                     {resource}
                                   </div>
@@ -800,9 +827,6 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                                       <span>Copy ID</span>
                                     </>
                                   )}
-                                </button>
-                                <button className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
-                                  <MoreVertical className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>

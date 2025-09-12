@@ -575,84 +575,87 @@ export class CostService {
       }
   
       const sql = `
-      WITH project_sums AS (
-        -- per-resource sums for rows that explicitly have a user_project
-        SELECT
-          COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
-          NULLIF(TRIM(resource_tags['user_project']), '') AS user_project,
-          SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS project_cost,
-          COUNT(*) AS project_rows
-        FROM ${this.athenaDatabase}.cur_daily_v1
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}'
-          AND date(line_item_usage_start_date) <= DATE '${End}'
-          AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
-          AND NULLIF(TRIM(resource_tags['user_project']), '') IS NOT NULL
-        GROUP BY
-          COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id),
-          NULLIF(TRIM(resource_tags['user_project']), '')
-      ),
-      
-      project_ranked AS (
-        -- pick the dominant project per resource (by cost, then by rows)
-        SELECT
-          resource_id,
-          user_project,
-          project_cost,
-          project_rows,
-          ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY project_cost DESC, project_rows DESC) AS rn
-        FROM project_sums
-      ),
-      
-      project_lookup AS (
-        -- one dominant project per resource (if present)
-        SELECT resource_id, user_project AS inferred_project
-        FROM project_ranked
-        WHERE rn = 1
-      ),
-      
-      resolved AS (
-        -- attach inferred project to every row; explicit wins (COALESCE chooses explicit if present)
-        SELECT
-          COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) AS resource_id,
-          NULLIF(TRIM(t.resource_tags['user_project']), '') AS explicit_project,
-          l.inferred_project,
-          COALESCE(NULLIF(TRIM(t.resource_tags['user_project']), ''), l.inferred_project) AS resolved_project,
-          COALESCE(t.amortized_cost, t.line_item_unblended_cost, 0) AS usd_cost
-        FROM ${this.athenaDatabase}.cur_daily_v1 t
-        LEFT JOIN project_lookup l
-          ON COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) = l.resource_id
-        WHERE date(t.line_item_usage_start_date) >= DATE '${Start}'
-          AND date(t.line_item_usage_start_date) <= DATE '${End}'
-          AND (t.amortized_cost IS NOT NULL OR t.line_item_unblended_cost IS NOT NULL)
-      )
-      
-      SELECT
-        COALESCE(resolved_project, '<UNMAPPED>') AS project_tag,
-        SUM(usd_cost) AS total_usd,
-        SUM(CAST(ROUND(usd_cost * 100, 0) AS BIGINT)) AS total_cents,
-        COUNT(DISTINCT resource_id) AS resource_count,
-        COUNT(*) AS rows
-      FROM resolved
-      GROUP BY COALESCE(resolved_project, '<UNMAPPED>')
-      ORDER BY total_cents DESC
-      LIMIT 500;
-          `;
-      
-          console.log('getProjectCosts SQL:\\n', sql);
-          const rows = await this.runAthenaQuery(sql);
-          console.log('getProjectCosts - sample rows:', rows.slice(0, 8));
-      
-          return rows.map(r => ({
-            project: r.project_tag,
-            cost: Number(r.total_usd || 0),
-            cost_cents: Number(r.total_cents || 0),
-            resources: Number(r.resource_count || 0)
-          }));
-        } catch (err) {
-          console.error('❌ getProjectCosts failed:', err);
-          return [];
-        }
-      }
+  WITH project_sums AS (
+    SELECT
+      COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
+      NULLIF(TRIM(resource_tags['user_project']), '') AS user_project,
+      SUM(COALESCE(amortized_cost, line_item_unblended_cost, 0)) AS project_cost,
+      COUNT(*) AS project_rows
+    FROM ${this.athenaDatabase}.cur_daily_v1
+    WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+      AND date(line_item_usage_start_date) <= DATE '${End}'
+      AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
+      AND NULLIF(TRIM(resource_tags['user_project']), '') IS NOT NULL
+    GROUP BY
+      COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id),
+      NULLIF(TRIM(resource_tags['user_project']), '')
+  ),
+  
+  project_ranked AS (
+    SELECT
+      resource_id,
+      user_project,
+      project_cost,
+      project_rows,
+      ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY project_cost DESC, project_rows DESC) AS rn
+    FROM project_sums
+  ),
+  
+  project_lookup AS (
+    SELECT resource_id, user_project AS inferred_project
+    FROM project_ranked
+    WHERE rn = 1
+  ),
+  
+  resolved AS (
+    SELECT
+      COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) AS resource_id,
+      NULLIF(TRIM(t.resource_tags['user_project']), '') AS explicit_project,
+      l.inferred_project,
+      COALESCE(NULLIF(TRIM(t.resource_tags['user_project']), ''), l.inferred_project) AS resolved_project,
+      COALESCE(t.amortized_cost, t.line_item_unblended_cost, 0) AS usd_cost
+    FROM ${this.athenaDatabase}.cur_daily_v1 t
+    LEFT JOIN project_lookup l
+      ON COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) = l.resource_id
+    WHERE date(t.line_item_usage_start_date) >= DATE '${Start}'
+      AND date(t.line_item_usage_start_date) <= DATE '${End}'
+      AND (t.amortized_cost IS NOT NULL OR t.line_item_unblended_cost IS NOT NULL)
+  )
+  
+  SELECT
+    COALESCE(resolved_project, '<UNMAPPED>') AS project_tag,
+    SUM(usd_cost) AS total_usd,
+    SUM(CAST(ROUND(usd_cost * 100, 0) AS BIGINT)) AS total_cents,
+    COUNT(DISTINCT resource_id) AS resource_count,
+    COUNT(*) AS rows,
+    -- distinct resource ids as array and CSV
+    array_agg(DISTINCT resource_id) AS resources_array,
+    array_join(array_agg(DISTINCT resource_id), ',') AS resources_csv
+  FROM resolved
+  GROUP BY COALESCE(resolved_project, '<UNMAPPED>')
+  ORDER BY total_cents DESC
+  LIMIT 500;
+      `;
+  
+      console.log('getProjectCosts SQL:\n', sql);
+      const rows = await this.runAthenaQuery(sql);
+      console.log('getProjectCosts - sample rows:', rows.slice(0, 8));
+  
+      // Map response to frontend model; resources_array may come back as an actual array or a string,
+      // so pass through directly (frontend parser handles formats).
+      return rows.map(r => ({
+        project: r.project_tag,
+        cost: Number(r.total_usd || 0),
+        cost_cents: Number(r.total_cents || 0),
+        resources: Number(r.resource_count || 0),
+        resourcesList: r.resources_array || null,   // prefer array if present
+        resources_csv: r.resources_csv || null
+      }));
+    } catch (err) {
+      console.error('❌ getProjectCosts failed:', err);
+      return [];
+    }
+  }
 
   estimateResourcesCost(resources) {
     let totalCost = 0;

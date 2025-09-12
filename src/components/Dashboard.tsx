@@ -358,19 +358,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
           </div>
         </div>
 
-        {/* Success Banner */}
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
-          <div className="flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <div>
-              <h3 className="font-medium text-green-800">Connected to AWS Cost Explorer</h3>
-              <p className="text-sm text-green-700">
-                Successfully loaded real-time cost analysis with {data.dailyCostData?.length || 0} days of daily data and {data.serviceCosts?.length || 0} active services
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Total Cost Card */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 mb-8 text-white shadow-2xl">
           <div className="flex items-center gap-4 mb-4">
@@ -387,7 +374,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
           </div>
           <div className="flex items-center gap-2 text-blue-100">
             <TrendingUp className="w-5 h-5" />
-            <span>Real-time data from AWS Cost Explorer</span>
+            <span>Real-time data from AWS CUR Data</span>
           </div>
         </div>
 
