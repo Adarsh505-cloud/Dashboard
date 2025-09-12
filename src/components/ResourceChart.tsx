@@ -1,5 +1,5 @@
-// ResourceChart.tsx (updated — TopSpendingResources fixed inline)
-import React, { useState, useEffect, useRef } from 'react';
+// src/components/ResourceChart.tsx
+import React, { useState } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -29,9 +29,9 @@ import {
   Globe,
   DollarSign,
   CheckCircle,
-  MapPin,
-  Copy
+  MapPin
 } from 'lucide-react';
+import TopSpendingResources from './TopSpendingResources';
 
 ChartJS.register(
   CategoryScale,
@@ -91,7 +91,7 @@ interface ResourceChartProps {
   data: ResourceCost[];
   dailyCostData?: DailyCostData[];
   weeklyCostData?: WeeklyCostData[];
-  topSpendingResources?: TopSpendingResource[]; // NEW optional prop
+  topSpendingResources?: TopSpendingResource[];
 }
 
 interface ProcessedCostData {
@@ -105,10 +105,9 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const [chartType, setChartType] = useState<'line' | 'bar' | 'doughnut'>('line');
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
 
-  // Process real cost data (unchanged)
+  // Process real cost data
   const processRealCostData = (range: 'daily' | 'weekly' | 'monthly'): ProcessedCostData => {
     if (range === 'daily' && dailyCostData) {
-      console.log('📊 Using real daily cost data from AWS Cost Explorer');
       const serviceData: Record<string, number[]> = {};
       const labels: string[] = [];
 
@@ -131,7 +130,6 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
     }
 
     if (range === 'weekly' && weeklyCostData) {
-      console.log('📊 Using real weekly cost data from AWS Cost Explorer');
       const serviceData: Record<string, number[]> = {};
       const labels: string[] = [];
 
@@ -153,7 +151,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       return { serviceData, labels };
     }
 
-    // Fallback monthly data (unchanged)
+    // Fallback monthly data
     const serviceData: Record<string, number[]> = {};
     const labels = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -170,7 +168,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   ];
 
   // Filter out resources with zero cost or count
-  const validResources = data.filter(resource => resource.cost > 0 && resource.count > 0);
+  const validResources = (data || []).filter(resource => resource.cost > 0 && resource.count > 0);
 
   // Processed cost & labels
   const { serviceData, labels } = processRealCostData(timeRange);
@@ -191,11 +189,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
     ? topSpendingResources.slice(0, 10)
     : top10ResourcesFallback;
 
-  // DEBUG: see what top10 contains (open browser console)
-  // Remove or comment out in production
-  // console.log('ResourceChart top10:', top10);
-
-  // Chart data (unchanged use elsewhere)
+  // Chart data
   const getChartData = () => {
     if (chartType === 'doughnut') {
       return {
@@ -400,7 +394,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
 
   const costRange = getDailyCostRange();
 
-  // If no resources, preserve the original "no data" UI
+  // No-resources UI
   if (validResources.length === 0) {
     return (
       <div className="space-y-8">
@@ -480,80 +474,10 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
         </div>
       </div>
 
-      {/* REPLACED: Top 10 Chart --> Top 10 Table (integrated from TopSpendingResources) */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">Top Spending Resources (Last 30 Days)</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Resource
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Resource Type
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cost
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {top10.map((resource, index) => {
-                const displayId = resource.resource_id || resource.raw_resource_id || resource.service || 'unknown';
-                const rawId = resource.raw_resource_id || null;
-                const keyId = resource.raw_resource_id || resource.resource_id || `${resource.service}-${index}`;
-
-                return (
-                  <tr key={keyId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-lg">
-                          {getResourceIcon(resource.service || resource.resource_type || '')}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 truncate" style={{ maxWidth: '20rem' }} title={displayId}>
-                            {displayId}
-                          </div>
-                          {rawId && rawId !== displayId ? (
-                            <div className="text-xs text-gray-400 truncate" title={rawId}>
-                              {resource.service} · ({rawId})
-                            </div>
-                          ) : (
-                            <div className="text-xs text-gray-500">{resource.service}</div>
-                          )}
-                        </div>
-                        <div className="ml-3">
-                          <button
-                            onClick={() => navigator.clipboard?.writeText(displayId)}
-                            title={`Copy resource id: ${displayId}`}
-                            className="ml-2 p-1 rounded hover:bg-gray-100"
-                          >
-                            <Copy className="w-4 h-4 text-gray-500" />
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        {resource.resource_type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-gray-900">
-                      ${Number(resource.total_cost || 0).toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* REFACTORED: Use the TopSpendingResources component */}
+      <TopSpendingResources topSpendingResources={top10} />
 
       {/* Controls, main chart and details (unchanged) */}
-      {/* ... rest of the component unchanged ... (kept as in your original file) */}
-
-      {/* Controls */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div>
@@ -710,7 +634,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
         </div>
       </div>
 
-      {/* Resource Details (unchanged) */}
+      {/* Resource Details */}
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
         <h3 className="text-xl font-semibold text-gray-900 mb-6">Resource Type Details</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
