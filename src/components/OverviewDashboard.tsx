@@ -317,7 +317,6 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
             <div>
               <h3 className="text-xl font-semibold text-gray-900">Cost Trend (Last 30 Days)</h3>
               <p className="text-gray-500">
-                Daily spending over the last 30 days from AWS CUR
               </p>
             </div>
             <div className="p-2 bg-blue-100 rounded-lg">
@@ -333,12 +332,11 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
               <span className="text-gray-600">Daily Cost</span>
             </div>
             <div className="text-gray-500">
-              {data.costTrendData ? 'Last 30 days from Athena' : 'Last 6 months'}
+              {data.costTrendData ? 'Last 30 days from Daily CUR Data' : 'Last 6 months'}
             </div>
           </div>
           {data.costTrendData && (
             <div className="mt-2 text-xs text-green-600 font-medium">
-              ✅ Real data from your AWS account
             </div>
           )}
         </div>
@@ -349,7 +347,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-900">Top Services</h3>
-              <p className="text-gray-500">Highest cost generators</p>
+              <p className="text-gray-500"> </p>
             </div>
             <div className="p-2 bg-green-100 rounded-lg">
               <PieChart className="w-5 h-5 text-green-600" />
