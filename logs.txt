@@ -1,0 +1,18 @@
+START RequestId: 3b8ca48d-ca65-46f9-9b7f-a919de0733a4 Version: $LATEST
+2025-09-24T18:22:25.942Z	3b8ca48d-ca65-46f9-9b7f-a919de0733a4	INFO	LAMBDA EVENT START {
+  routeKey: undefined,
+  path: '/health',
+  method: 'GET',
+  headers: [ 'origin' ],
+  apigwRequestId: null
+}
+2025-09-24T18:22:26.123Z	3b8ca48d-ca65-46f9-9b7f-a919de0733a4	INFO	health route hit {
+  headers: {
+    origin: 'https://cloudbillanalyzer.epiuse-aws.com',
+    'content-length': 0
+  },
+  method: 'GET'
+}
+2025-09-24T18:22:26.283Z	3b8ca48d-ca65-46f9-9b7f-a919de0733a4	INFO	LAMBDA RESPONSE STATUS: 200
+END RequestId: 3b8ca48d-ca65-46f9-9b7f-a919de0733a4
+REPORT RequestId: 3b8ca48d-ca65-46f9-9b7f-a919de0733a4	Duration: 407.36 ms	Billed Duration: 1932 ms	Memory Size: 128 MB	Max Memory Used: 128 MB	Init Duration: 1524.30 ms	

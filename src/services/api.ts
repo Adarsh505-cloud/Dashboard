@@ -1,4 +1,6 @@
-// Add this interface at the top of the file
+// api.ts
+
+// -------------------- Interfaces --------------------
 export interface ResourceDetail {
   id: string;
   name: string;
@@ -18,8 +20,6 @@ export interface ResourceDetail {
   };
 }
 
-const API_BASE_URL = '';
-
 export interface ApiCredentials {
   accountId: string;
   roleArn: string;
@@ -34,120 +34,102 @@ export interface ApiResponse<T> {
   timestamp?: string;
 }
 
+// -------------------- Base URL --------------------
+const API_GATEWAY_URL =
+  'https://yxxc6buhjk.execute-api.us-west-2.amazonaws.com'; // all endpoints (Express handles proxying to Lambda)
+
+// -------------------- Service --------------------
 class ApiService {
-  private async makeRequest<T>(
-    endpoint: string, 
-    credentials: ApiCredentials
-  ): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    
+  private async makeRequest<T>(url: string, body?: any): Promise<T> {
     console.log(`🔄 Making API request to: ${url}`);
-    console.log(`📋 Credentials:`, {
-      accountId: credentials.accountId,
-      roleArn: credentials.roleArn.substring(0, 50) + '...'
-    });
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: body ? 'POST' : 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(credentials),
+        body: body ? JSON.stringify(body) : undefined,
       });
 
       console.log(`📡 Response status: ${response.status} ${response.statusText}`);
 
-      const data: ApiResponse<T> = await response.json();
-      
-      console.log(`📦 Response data:`, {
-        success: data.success,
-        hasData: !!data.data,
-        error: data.error,
-        code: data.code,
-        timestamp: data.timestamp
-      });
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+      // Try to parse JSON safely
+      const text = await response.text();
+      let raw: any;
+      try {
+        raw = text ? JSON.parse(text) : null;
+      } catch {
+        raw = text;
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'API request failed');
-      }
+      // Detect ApiResponse<T>
+      const looksLikeApiResponse =
+        raw && typeof raw === 'object' && Object.prototype.hasOwnProperty.call(raw, 'success');
 
-      return data.data as T;
-    } catch (error) {
-      console.error(`❌ API request failed for ${endpoint}:`, error);
-      
+      if (looksLikeApiResponse) {
+        const apiResp = raw as ApiResponse<T>;
+        console.log('📦 Response (ApiResponse):', apiResp);
+
+        if (!response.ok) {
+          throw new Error(apiResp.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        if (!apiResp.success) {
+          throw new Error(apiResp.error || 'API request failed');
+        }
+
+        return apiResp.data as T;
+      } else {
+        // plain JSON or text
+        console.log('📦 Response (plain):', raw ?? text);
+        if (!response.ok) {
+          const errMsg = raw && raw.error ? raw.error : `HTTP ${response.status}: ${response.statusText}`;
+          throw new Error(errMsg);
+        }
+        return (raw ?? text) as T;
+      }
+    } catch (error: unknown) {
+      console.error(`❌ API request failed for ${url}:`, error);
+
       if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Unable to connect to backend server. Please ensure the backend is running on port 3001.');
+        throw new Error('Unable to connect to backend server. Please ensure the backend is running.');
       }
-      
-      throw error;
+
+      throw error instanceof Error ? error : new Error('Unknown error during API request');
     }
   }
 
+  // ---------- Cost endpoints ----------
   async getComprehensiveAnalysis(credentials: ApiCredentials) {
-    return this.makeRequest('/api/cost/analysis', credentials);
+    return this.makeRequest(`${API_GATEWAY_URL}/api/cost/analysis`, credentials);
   }
 
   async getResourcesForService(credentials: ApiCredentials, serviceName: string) {
     const body = { ...credentials, serviceName };
-    // Tell the function to expect an array of ResourceDetail objects
-    return this.makeRequest<ResourceDetail[]>('/api/cost/resources', body);
+    return this.makeRequest<ResourceDetail[]>(`${API_GATEWAY_URL}/api/cost/resources`, body);
   }
 
   async getServiceCosts(credentials: ApiCredentials) {
-    return this.makeRequest('/api/cost/services', credentials);
+    return this.makeRequest(`${API_GATEWAY_URL}/api/cost/services`, credentials);
   }
 
   async getUserCosts(credentials: ApiCredentials) {
-    return this.makeRequest('/api/cost/users', credentials);
+    return this.makeRequest(`${API_GATEWAY_URL}/api/cost/users`, credentials);
   }
 
   async getProjectCosts(credentials: ApiCredentials) {
-    return this.makeRequest('/api/cost/projects', credentials);
+    return this.makeRequest(`${API_GATEWAY_URL}/api/cost/projects`, credentials);
   }
 
   async getRecommendations(credentials: ApiCredentials) {
-    return this.makeRequest('/api/cost/recommendations', credentials);
+    return this.makeRequest(`${API_GATEWAY_URL}/api/cost/recommendations`, credentials);
   }
 
+  // ---------- Health check ----------
   async checkHealth(): Promise<{ status: string; timestamp: string; environment: string }> {
-    const url = `${API_BASE_URL}/health`;
+    const url = `${API_GATEWAY_URL}/health`;
     console.log(`🏥 Checking backend health: ${url}`);
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Invalid response format - expected JSON');
-      }
-      
-      const data = await response.json();
-      
-      console.log(`💚 Backend health check:`, data);
-      return data;
-    } catch (error) {
-      console.error(`💔 Backend health check failed:`, error);
-      
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Backend server is not responding - connection refused');
-      }
-      
-      throw new Error(`Backend health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return this.makeRequest(url);
   }
 }
 
