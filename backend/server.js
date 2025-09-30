@@ -1,30 +1,24 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import serverless from 'serverless-http'; // Added for Lambda compatibility
 import costRoutes from './routes/cost.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Security middleware
 app.use(helmet());
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-});
-app.use(limiter);
+// Note: Rate limiting is typically handled by API Gateway in a serverless setup.
+// The express-rate-limit middleware is removed as it's less effective here.
 
-// CORS configuration
+// CORS configuration for production
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: 'https://cloudbillanalyzer.epiuse-aws.com', // Hardcoded for production
   credentials: true,
 }));
 
@@ -34,10 +28,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    environment: process.env.NODE_ENV || 'production'
   });
 });
 
@@ -47,13 +41,10 @@ app.use('/api/cost', costRoutes);
 // Error handling middleware
 app.use(errorHandler);
 
-// 404 handler
+// 404 handler for serverless environment
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 AWS Cost Backend running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🌐 CORS enabled for: ${process.env.FRONTEND_URL}`);
-});
+// Export the handler for AWS Lambda instead of listening on a port
+export const handler = serverless(app);

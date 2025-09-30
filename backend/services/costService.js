@@ -6,25 +6,6 @@ import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, Get
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 import { ResourceGroupsTaggingAPIClient } from "@aws-sdk/client-resource-groups-tagging-api";
 import { EC2Client } from '@aws-sdk/client-ec2';
-import { RDSClient } from '@aws-sdk/client-rds';
-import { S3Client } from '@aws-sdk/client-s3';
-import { EKSClient } from '@aws-sdk/client-eks';
-import { WorkSpacesClient } from '@aws-sdk/client-workspaces';
-import { CloudWatchClient } from '@aws-sdk/client-cloudwatch';
-import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { KMSClient } from '@aws-sdk/client-kms';
-import { ConfigServiceClient } from '@aws-sdk/client-config-service';
-import { Route53Client } from '@aws-sdk/client-route-53';
-import { ECRClient } from '@aws-sdk/client-ecr';
-import { ApiGatewayV2Client } from '@aws-sdk/client-apigatewayv2';
-import { SSMClient } from '@aws-sdk/client-ssm';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { LocationClient } from '@aws-sdk/client-location';
-import { EFSClient } from '@aws-sdk/client-efs';
-import { BackupClient } from '@aws-sdk/client-backup';
-import { SQSClient } from '@aws-sdk/client-sqs';
-import { LambdaClient } from '@aws-sdk/client-lambda';
-import { StorageGatewayClient } from '@aws-sdk/client-storage-gateway';
 
 export class CostService {
   constructor(accountId, roleArn) {

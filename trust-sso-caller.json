@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::183631321229:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_6ea2ca06ca9ff690"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+
