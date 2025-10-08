@@ -523,8 +523,6 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
                 <option value="all">All Status</option>
                 <option value="Active">Active</option>
                 <option value="terminated">Terminated</option>
-                <option value="stopped">Stopped</option>
-                <option value="pending">Pending</option>
               </select>
               <select
                 value={filterRegion}
@@ -547,17 +545,6 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({
               </select>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setLoading(true);
-                  setResources([]);
-                  setTimeout(() => setLoading(false), 300);
-                }}
-                className="flex items-center gap-2 px-4 py-3 text-slate-600 hover:bg-slate-50 rounded-xl transition-all duration-200 border border-slate-200"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Refresh
-              </button>
               <button
                 onClick={() => {
                   const csvRows = [];
