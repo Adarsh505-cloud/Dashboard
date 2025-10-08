@@ -343,33 +343,129 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="container mx-auto px-6 py-8 text-center">
-            <Loader className="w-10 h-10 text-blue-600 animate-spin mx-auto my-12" />
-            <h2 className="text-2xl font-semibold text-slate-800">Analyzing Resources...</h2>
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center gap-4 mb-8">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Services
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
+              <p className="text-slate-600">Loading enhanced resource data from your AWS account...</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-12 text-center">
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <Loader className="w-10 h-10 text-blue-600 animate-spin" />
+              <h2 className="text-2xl font-semibold text-slate-800">Analyzing Resources</h2>
+            </div>
+            <p className="text-slate-600 mb-8 text-lg">
+              Correlating cost data with CloudTrail events to identify owners and lifecycles...
+            </p>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 text-left max-w-2xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>Connecting to Cost and Usage Reports</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  <span>Querying CloudTrail for creation events</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  <span>Querying CloudTrail for deletion events</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+                  <span>Extracting resource metadata and tags</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
+
   if (error) {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-            <div className="container mx-auto px-6 py-8 text-center">
-                <AlertCircle className="w-10 h-10 text-red-600 mx-auto my-12" />
-                <h2 className="text-2xl font-semibold text-red-800">Failed to Load Resources</h2>
-                <p className="text-red-700 mt-2">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center gap-4 mb-8">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Services
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
+              <p className="text-red-600">Error loading resource data</p>
             </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-red-200 p-12 text-center">
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+              <h2 className="text-2xl font-semibold text-red-800">Failed to Load Resources</h2>
+            </div>
+            <p className="text-red-700 mb-8 text-lg">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-2 px-8 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 mx-auto shadow-lg"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Retry
+            </button>
+          </div>
         </div>
+      </div>
     );
   }
+
   if (resources.length === 0) {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-            <div className="container mx-auto px-6 py-8 text-center">
-                <Server className="w-16 h-16 text-slate-300 mx-auto my-12" />
-                <h2 className="text-2xl font-semibold text-slate-900">No Resources Found</h2>
-                <p className="text-slate-600 mt-2">No resources found for {serviceName} in your AWS account.</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="container mx-auto px-6 py-8">
+          <div className="flex items-center gap-4 mb-8">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Services
+            </button>
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200">
+                {getServiceIcon(serviceName)}
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
+                <p className="text-slate-600">No resources found for this service</p>
+              </div>
             </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-12 text-center">
+            <Server className="w-16 h-16 text-slate-300 mx-auto mb-6" />
+            <h2 className="text-2xl font-semibold text-slate-900 mb-4">No Resources Found</h2>
+            <p className="text-slate-600 mb-8 text-lg">
+              No resources for {serviceName} were found in your AWS account's cost data.
+            </p>
+            <div className="bg-slate-50 rounded-xl p-6 text-left max-w-md mx-auto">
+              <p className="text-slate-700 font-medium mb-3">This could be because:</p>
+              <ul className="list-disc list-inside text-slate-600 space-y-2">
+                <li>No resources of this type incurred costs in the current period.</li>
+                <li>Resources exist but have not yet appeared in the cost reports.</li>
+                <li>The service has no billable resources (e.g., IAM).</li>
+              </ul>
+            </div>
+          </div>
         </div>
+      </div>
     );
   }
 
