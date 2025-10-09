@@ -11,7 +11,6 @@ import {
   FolderOpen,
   AlertTriangle,
   RefreshCw,
-  CheckCircle,
   AlertCircle,
   XCircle,
   Loader,
@@ -39,7 +38,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isExporting, setIsExporting] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
-
   const { data, loading, error, retry } = useApiData(credentials);
 
   const handleExportPDF = async () => {
@@ -77,8 +75,8 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   ];
 
   // Debugging: inspect incoming data shape (remove in prod)
-  if (process.env.NODE_ENV !== 'production' && data) {
-    // eslint-disable-next-line no-console
+  // Use Vite's import.meta.env.DEV instead of process.env.NODE_ENV
+  if (import.meta.env.DEV && data) {
     console.log('Dashboard: incoming data shape:', {
       keys: Object.keys(data || {}),
       topSpendingResources: data?.topSpendingResources || data?.top_spending_resources || data?.topResources || data?.top_resources
@@ -89,9 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const mapTopSpendingResources = (rawAny: any): any[] | undefined => {
     if (!rawAny) return undefined;
     if (!Array.isArray(rawAny)) return undefined;
-
     return rawAny.map((r: any, idx: number) => {
-      // Common nestings/field names to normalize:
       const resourceId =
         r.resource_id ||
         r.raw_resource_id ||
@@ -103,8 +99,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         r.attributes?.resource_id ||
         r.resource?.id ||
         null;
-
-      // cost fields might be named differently:
       const totalCost =
         r.total_cost ||
         r.cost ||
@@ -112,21 +106,19 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         r.totalCost ||
         Number(r.total_cost_usd) ||
         0;
-
       return {
         service: r.service || r.resource || r.serviceName || r.name || 'unknown',
+        region: r.region || 'unknown',
         resource_type: r.resource_type || r.type || r.resourceType || 'unknown',
         resource_id: resourceId,
         raw_resource_id: r.raw_resource_id || r.rawId || null,
         total_cost: Number(totalCost || 0),
-        // keep original for debugging if needed
         __raw: r,
         __index: idx,
       };
     });
   };
 
-  // Prepare mappedTop from any likely api field names
   const mappedTop =
     mapTopSpendingResources(data?.topSpendingResources) ||
     mapTopSpendingResources(data?.top_spending_resources) ||
@@ -134,7 +126,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     mapTopSpendingResources(data?.top_resources) ||
     undefined;
 
-  // Loading / Error / No-data UI (unchanged from your original code)
   if (loading) {
     return (
       <div className="min-h-screen p-4 lg:p-8">
@@ -152,7 +143,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               <p className="text-gray-600">Account: {credentials.accountId}</p>
             </div>
           </div>
-
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
             <div className="flex items-center justify-center gap-4 mb-4">
               <Loader className="w-8 h-8 text-blue-600 animate-spin" />
@@ -180,7 +170,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     
     const isConnectionError = error.includes('Backend server not available') ||
                              error.includes('connection refused');
-
     return (
       <div className="min-h-screen p-4 lg:p-8">
         <div className="max-w-7xl mx-auto">
@@ -197,7 +186,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               <p className="text-gray-600">Account: {credentials.accountId}</p>
             </div>
           </div>
-
           <div className={`border rounded-xl p-8 text-center ${
             isCredentialsError ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
           }`}>
@@ -224,7 +212,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                 : error
               }
             </p>
-
             <div className={`rounded-lg p-4 mb-6 text-sm ${
               isCredentialsError ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
             }`}>
@@ -249,7 +236,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                 </div>
               )}
             </div>
-
             <div className="flex items-center justify-center gap-4">
               <button
                 onClick={onBack}
@@ -293,7 +279,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               <p className="text-gray-600">Account: {credentials.accountId}</p>
             </div>
           </div>
-
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">No Data Available</h2>
             <p className="text-gray-600 mb-6">
@@ -312,7 +297,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     );
   }
 
-  // Success state with data
   return (
     <div className="min-h-screen p-4 lg:p-8">
       <div className="max-w-7xl mx-auto">
@@ -357,7 +341,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </button>
           </div>
         </div>
-
         {/* Total Cost Card */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 mb-8 text-white shadow-2xl">
           <div className="flex items-center gap-4 mb-4">
@@ -377,7 +360,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             <span>Real-time data from AWS CUR Data</span>
           </div>
         </div>
-
         {/* Navigation Tabs */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8 overflow-hidden">
           <div className="flex overflow-x-auto">
@@ -400,7 +382,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             })}
           </div>
         </div>
-
         {/* Dashboard Content */}
         <div ref={dashboardRef} className="space-y-8">
           {activeTab === 'overview' && <OverviewDashboard data={data} />}

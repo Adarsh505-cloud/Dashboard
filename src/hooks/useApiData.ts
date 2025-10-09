@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react';
 import { apiService, ApiCredentials } from '../services/api';
 
+// Define the shape of TopSpendingResource once, correctly
+interface TopSpendingResource {
+  service: string;
+  region: string;
+  resource_type: string;
+  resource_id?: string | null;
+  raw_resource_id?: string | null;
+  total_cost: number;
+}
+
+// Correct CostTrendData to match OverviewDashboard's expectation
 interface CostTrendData {
-  month: string;
+  date: string;
   cost: number;
-  period: {
-    Start: string;
-    End: string;
-  };
 }
 
 interface DailyCostData {
@@ -40,11 +47,13 @@ interface WeeklyCostData {
   }>;
 }
 
+// This is the main interface to fix.
+// Add all missing properties here.
 interface ApiData {
   totalMonthlyCost: number;
   serviceCosts: Array<{ service: string; cost: number; region: string }>;
   regionCosts: Array<{ region: string; cost: number }>;
-  userCosts: Array<{ user: string; cost: number; resources: number }>;
+  userCosts: Array<{ user: string; cost: number; resources: number; resourcesList: string[] | null | string; }>; // Added resourcesList
   resourceCosts: Array<{ type: string; cost: number; trend: number[]; count: number }>;
   projectCosts: Array<{ project: string; cost: number; resources: number; owner: string }>;
   recommendations: Array<{
@@ -60,6 +69,10 @@ interface ApiData {
   costTrendData?: CostTrendData[];
   dailyCostData?: DailyCostData[];
   weeklyCostData?: WeeklyCostData[];
+  topSpendingResources?: TopSpendingResource[]; // Added topSpendingResources
+  top_spending_resources?: TopSpendingResource[]; // Added snake_case version
+  topResources?: TopSpendingResource[];
+  top_resources?: TopSpendingResource[];
 }
 
 interface UseApiDataResult {
