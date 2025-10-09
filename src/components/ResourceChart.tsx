@@ -12,6 +12,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler, // ADDED: For area fill
 } from 'chart.js';
 import {
   Calendar,
@@ -28,7 +29,6 @@ import {
   HardDrive,
   Globe,
   DollarSign,
-  CheckCircle,
   MapPin
 } from 'lucide-react';
 import TopSpendingResources from './TopSpendingResources';
@@ -42,10 +42,11 @@ ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler // ADDED: For area fill
 );
 
-// ------- Interfaces -------
+// ------- Interfaces (unchanged) -------
 interface ResourceCost {
   type: string;
   cost: number;
@@ -79,10 +80,9 @@ interface WeeklyCostData {
   Groups?: DailyCostGroup[];
 }
 
-// This interface must be correct
 interface TopSpendingResource {
   service: string;
-  region: string; // Ensure this is here
+  region: string;
   resource_type: string;
   resource_id?: string | null;
   raw_resource_id?: string | null;
@@ -107,13 +107,45 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const [chartType, setChartType] = useState<'line' | 'bar' | 'doughnut'>('line');
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   
-  // DEBUG LOG: Log the incoming props
   useEffect(() => {
     console.log('🚀 ResourceChart mounted with topSpendingResources:', topSpendingResources);
   }, [topSpendingResources]);
 
+  // ADDED: New function to process daily data into monthly aggregates
+  const processMonthlyCostData = (dailyData: DailyCostData[]): ProcessedCostData => {
+    const monthlyAggregates: Record<string, Record<string, number>> = {};
+    
+    dailyData.forEach(dayData => {
+      const date = new Date(dayData.TimePeriod.Start);
+      const monthLabel = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 
-  // (processRealCostData, colors, validResources, and labels are unchanged)
+      if (!monthlyAggregates[monthLabel]) {
+        monthlyAggregates[monthLabel] = {};
+      }
+
+      dayData.Groups?.forEach(group => {
+        const service = group.Keys?.[0] || 'Unknown';
+        const cost = parseFloat(group.Metrics?.BlendedCost?.Amount || '0');
+        
+        monthlyAggregates[monthLabel][service] = (monthlyAggregates[monthLabel][service] || 0) + cost;
+      });
+    });
+
+    const labels = Object.keys(monthlyAggregates).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const allServices = new Set<string>();
+    Object.values(monthlyAggregates).forEach(monthData => {
+      Object.keys(monthData).forEach(service => allServices.add(service));
+    });
+
+    const serviceData: Record<string, number[]> = {};
+    allServices.forEach(service => {
+      serviceData[service] = labels.map(label => monthlyAggregates[label][service] || 0);
+    });
+
+    return { serviceData, labels };
+  };
+
+  // CHANGED: Updated this function to handle all granularities correctly
   const processRealCostData = (range: 'daily' | 'weekly' | 'monthly'): ProcessedCostData => {
     if (range === 'daily' && dailyCostData) {
       const serviceData: Record<string, number[]> = {};
@@ -159,6 +191,12 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       return { serviceData, labels };
     }
     
+    // ADDED: Monthly processing now uses the real daily data
+    if (range === 'monthly' && dailyCostData) {
+      return processMonthlyCostData(dailyCostData);
+    }
+    
+    // Fallback if no specific data is available
     const serviceData: Record<string, number[]> = {};
     const labels = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     data.forEach(resource => {
@@ -173,15 +211,12 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   ];
   const validResources = (data || []).filter(resource => resource.cost > 0 && resource.count > 0);
   const { serviceData, labels } = processRealCostData(timeRange);
-  // (End of unchanged code)
 
-
-  // UPDATED LOGIC HERE
   const top10 = (Array.isArray(topSpendingResources) && topSpendingResources.length > 0
     ? topSpendingResources
     : validResources.map(r => ({
         service: r.type,
-        region: 'global', // Fallback region
+        region: 'global',
         resource_type: r.type,
         resource_id: 'N/A',
         raw_resource_id: 'N/A',
@@ -189,10 +224,8 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       }))
   ).slice(0, 10);
 
-  // DEBUG LOG: Log the final data being passed to the child component
   console.log('🎯 Final top10 data for TopSpendingResources component:', top10);
 
-  // (The rest of the component remains unchanged)
   const getChartData = () => {
     if (chartType === 'doughnut') {
       return {
@@ -209,13 +242,19 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       };
     }
 
-    const datasets = Object.entries(serviceData)
-      .filter(([, costs]) => {
-        const totalCost = Array.isArray(costs) ? costs.reduce((sum: number, cost: number) => sum + cost, 0) : 0;
-        return totalCost > 0;
-      })
+    // CHANGED: Sort by total cost to show top spending resources, then slice.
+    const sortedServices = Object.entries(serviceData)
+      .map(([service, costs]) => ({
+        service,
+        costs,
+        totalCost: costs.reduce((sum, cost) => sum + cost, 0)
+      }))
+      .filter(item => item.totalCost > 0)
+      .sort((a, b) => b.totalCost - a.totalCost);
+
+    const datasets = sortedServices
       .slice(0, 8)
-      .map(([service, costs], index) => {
+      .map(({ service, costs }, index) => {
         const serviceName = service.replace('Amazon ', '').replace(' Service', '');
         if (chartType === 'bar') {
           return {
@@ -232,12 +271,12 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
           label: serviceName,
           data: costs,
           borderColor: colors[index % colors.length],
-          backgroundColor: colors[index % colors.length] + '20',
+          backgroundColor: colors[index % colors.length] + '20', // For area fill
           borderWidth: 3,
-          pointRadius: 4,
+          pointRadius: timeRange === 'monthly' ? 4 : 2,
           pointHoverRadius: 6,
           tension: 0.4,
-          fill: false,
+          fill: true, // Enable area fill
         };
       });
 
@@ -247,7 +286,8 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
     };
   };
 
-  const getChartOptions = () => {
+  // CHANGED: Updated chart options to enable legend clicking for toggling visibility.
+  const getChartOptions = (): any => {
     const baseOptions = {
       responsive: true,
       maintainAspectRatio: false,
@@ -256,15 +296,27 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
           position: 'top' as const,
           labels: {
             padding: 20,
-            font: {
-              size: 12,
-              weight: 500 as const,
-            },
+            font: { size: 12, weight: 500 as const },
             usePointStyle: true,
             pointStyle: 'circle' as const,
-            filter: (legendItem: any, chartData: any) => {
-              return chartData.datasets.indexOf(chartData.datasets.find((d: any) => d.label === legendItem.text)) < 8;
+          },
+          // ADDED: onClick handler to toggle dataset visibility
+          onClick: (e: any, legendItem: any, legend: any) => {
+            const index = legendItem.datasetIndex;
+            const ci = legend.chart;
+            if (ci.isDatasetVisible(index)) {
+              ci.hide(index);
+              legendItem.hidden = true;
+            } else {
+              ci.show(index);
+              legendItem.hidden = false;
             }
+          },
+          onHover: (event: any) => {
+            event.native.target.style.cursor = 'pointer';
+          },
+          onLeave: (event: any) => {
+            event.native.target.style.cursor = 'default';
           },
         },
         tooltip: {
@@ -308,24 +360,16 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       scales: {
         y: {
           beginAtZero: true,
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)',
-          },
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
           ticks: {
             callback: (value: any) => `$${Number(value).toFixed(0)}`,
-            font: {
-              size: 11,
-            },
+            font: { size: 11 },
           },
         },
         x: {
-          grid: {
-            display: false,
-          },
+          grid: { display: false },
           ticks: {
-            font: {
-              size: 11,
-            },
+            font: { size: 11 },
             maxRotation: 45,
           },
         },
@@ -342,13 +386,14 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const chartOptions = getChartOptions();
   const totalCost = validResources.reduce((sum, resource) => sum + resource.cost, 0);
   const totalResources = validResources.reduce((sum, resource) => sum + resource.count, 0);
+  
   const getResourceTrend = (trend: number[]) => {
-    if (trend.length < 2) return 0;
+    if (!trend || trend.length < 2) return 0;
     const recent = trend.slice(-2);
-    if (recent[0] === 0) return 0;
+    if (recent[0] === 0) return recent[1] > 0 ? 100 : 0;
     return ((recent[1] - recent[0]) / recent[0]) * 100;
   };
-
+  
   const renderChart = () => {
     if (validResources.length === 0) {
       return (
@@ -381,6 +426,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
   const getDailyCostRange = () => {
     if (timeRange === 'daily' && chartData.datasets.length > 0) {
       const allCosts = chartData.datasets.flatMap(dataset => dataset.data as number[]);
+      if (allCosts.length === 0) return { min: 0, max: 0 };
       const minCost = Math.min(...allCosts);
       const maxCost = Math.max(...allCosts);
       return { min: minCost, max: maxCost };
@@ -434,21 +480,51 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
       <TopSpendingResources topSpendingResources={top10} />
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div><h3 className="text-xl font-semibold text-gray-900">Cost Analysis Controls</h3><p className="text-gray-500">View real AWS Cost Explorer data with different time ranges and chart types</p></div>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-              {(['daily', 'weekly', 'monthly'] as const).map((range) => (<button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${timeRange === range ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><div className="flex items-center gap-2"><Calendar className="w-4 h-4" />{range.charAt(0).toUpperCase() + range.slice(1)}</div></button>))}
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">Cost Analysis Controls</h3>
+            <p className="text-gray-500">Adjust the time range and chart type for the data below</p>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-500">Time Range</span>
+              <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                {(['daily', 'weekly', 'monthly'] as const).map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setTimeRange(range)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${timeRange === range ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-blue-600'}`}
+                  >
+                    <Calendar className="w-4 h-4" />
+                    {range.charAt(0).toUpperCase() + range.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-              {([ { type: 'line', icon: Activity, label: 'Line' }, { type: 'bar', icon: BarChart3, label: 'Bar' }, { type: 'doughnut', icon: PieChart, label: 'Pie' }] as const).map(({ type, icon: Icon, label }) => (<button key={type} onClick={() => setChartType(type)} className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${chartType === type ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><div className="flex items-center gap-2"><Icon className="w-4 h-4" />{label}</div></button>))}
+             <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-500">Chart Type</span>
+              <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                {([
+                  { type: 'line', icon: Activity, label: 'Line' },
+                  { type: 'bar', icon: BarChart3, label: 'Bar' },
+                  { type: 'doughnut', icon: PieChart, label: 'Pie' }
+                ] as const).map(({ type, icon: Icon, label }) => (
+                  <button
+                    key={type}
+                    onClick={() => setChartType(type)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${chartType === type ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-blue-600'}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2"><button className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"><RefreshCw className="w-4 h-4" />Refresh</button><button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"><Download className="w-4 h-4" />Export</button></div>
           </div>
         </div>
       </div>
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-6">
-          <div><h3 className="text-xl font-semibold text-gray-900">Resource Cost Trends - {timeRange.charAt(0).toUpperCase() + timeRange.slice(1)} View</h3><p className="text-gray-500">{chartType === 'doughnut' ? 'Current cost distribution across resource types' : `Real AWS ${timeRange} cost data for all resource types`}</p></div>
+          <div><h3 className="text-xl font-semibold text-gray-900">Resource Cost Trends - {timeRange.charAt(0).toUpperCase() + timeRange.slice(1)} View</h3><p className="text-gray-500">{chartType === 'doughnut' ? 'Current cost distribution across resource types' : `Top 8 spending services for the selected period`}</p></div>
           <div className="flex items-center gap-2 text-sm text-gray-500"><Globe className="w-4 h-4" /><span>All Regions</span></div>
         </div>
         <div className={`${chartType === 'doughnut' ? 'h-96' : 'h-80'}`}>{renderChart()}</div>
@@ -476,7 +552,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
                 <div className="h-16 relative">
                   <svg className="w-full h-full" viewBox="0 0 200 60">
                     <defs><linearGradient id={`gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor={colors[index % colors.length]} stopOpacity="0.3" /><stop offset="100%" stopColor={colors[index % colors.length]} stopOpacity="0.1" /></linearGradient></defs>
-                    {resource.trend.length > 1 ? (<><polyline fill="none" stroke={colors[index % colors.length]} strokeWidth="2" points={resource.trend.map((value, i) => { const x = (i / (resource.trend.length - 1)) * 200; const maxValue = Math.max(...resource.trend); const minValue = Math.min(...resource.trend); const range = maxValue - minValue || 1; const y = 50 - ((value - minValue) / range) * 40; return `${x},${y}`; }).join(' ')} /><polygon fill={`url(#gradient-${index})`} points={`0,50 ${resource.trend.map((value, i) => { const x = (i / (resource.trend.length - 1)) * 200; const maxValue = Math.max(...resource.trend); const minValue = Math.min(...resource.trend); const range = maxValue - minValue || 1; const y = 50 - ((value - minValue) / range) * 40; return `${x},${y}`; }).join(' ')} 200,50`} /></>) : (<text x="100" y="30" textAnchor="middle" className="text-xs fill-gray-400">No trend data</text>)}
+                    {resource.trend && resource.trend.length > 1 ? (<><polyline fill="none" stroke={colors[index % colors.length]} strokeWidth="2" points={resource.trend.map((value, i) => { const x = (i / (resource.trend.length - 1)) * 200; const maxValue = Math.max(...resource.trend); const minValue = Math.min(...resource.trend); const range = maxValue - minValue || 1; const y = 50 - ((value - minValue) / range) * 40; return `${x},${y}`; }).join(' ')} /><polygon fill={`url(#gradient-${index})`} points={`0,50 ${resource.trend.map((value, i) => { const x = (i / (resource.trend.length - 1)) * 200; const maxValue = Math.max(...resource.trend); const minValue = Math.min(...resource.trend); const range = maxValue - minValue || 1; const y = 50 - ((value - minValue) / range) * 40; return `${x},${y}`; }).join(' ')} 200,50`} /></>) : (<text x="100" y="30" textAnchor="middle" className="text-xs fill-gray-400">No trend data</text>)}
                   </svg>
                 </div>
                 {selectedResource === resource.type && (<div className="mt-4 pt-4 border-t border-blue-200"><div className="grid grid-cols-2 gap-4 text-sm"><div><span className="text-gray-500">Avg. Cost per Resource:</span><div className="font-medium">${(resource.cost / resource.count).toFixed(2)}</div></div><div><span className="text-gray-500">Real Daily Avg:</span><div className="font-medium">{timeRange === 'daily' && costRange.max > 0 ? `$${((costRange.min + costRange.max) / 2).toFixed(2)}` : 'N/A'}</div></div></div></div>)}
