@@ -13,7 +13,6 @@ import {
   Users, 
   DollarSign, 
   TrendingUp, 
-  User, 
   Hash, 
   Server,
   ChevronDown,
@@ -24,18 +23,10 @@ import {
   EyeOff,
   Search,
   X,
-  AlertCircle,
-  Database,
-  Code,
   Braces,
-  Filter,
   Grid,
   List,
-  MoreVertical,
   Download,
-  RefreshCw,
-  Settings,
-  Info,
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
@@ -59,29 +50,20 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
   const [viewingResourcesFor, setViewingResourcesFor] = useState<string | null>(null);
   const [copiedResource, setCopiedResource] = useState<string | null>(null);
   const [resourceSearchTerm, setResourceSearchTerm] = useState('');
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sortOrder, setSortOrder] = useState<'high-to-low' | 'low-to-high'>('high-to-low');
 
-  // Debug logging
+  // ADDED: Filter data to only include users with an "@" symbol in their name.
+  const filteredData = data.filter(item => item.user && item.user.includes('@'));
+
   useEffect(() => {
-    console.log('UserCostChart received data:', data);
-    if (data.length > 0) {
-      const firstUser = data[0];
+    // CHANGED: Use filteredData for logging
+    if (filteredData.length > 0) {
+      const firstUser = filteredData[0];
       console.log('First user resourcesList:', firstUser.resourcesList);
-      console.log('First user resources_csv:', firstUser.resources_csv);
       console.log('Type of resourcesList:', typeof firstUser.resourcesList);
-      
-      setDebugInfo({
-        totalUsers: data.length,
-        firstUser: firstUser.user,
-        firstUserResources: firstUser.resourcesList,
-        firstUserResourcesCount: firstUser.resources,
-        firstUserResourcesCsv: firstUser.resources_csv,
-        firstUserResourcesType: typeof firstUser.resourcesList
-      });
     }
-  }, [data]);
+  }, [filteredData]);
 
   const createGradient = (ctx: any, chartArea: any) => {
     const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
@@ -91,16 +73,12 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
   };
 
   const chartData = {
-    labels: data.map(item => {
-      const maxLength = 12;
-      return item.user.length > maxLength 
-        ? `${item.user.substring(0, maxLength)}...` 
-        : item.user;
-    }),
+    // CHANGED: Use filteredData and show full user names
+    labels: filteredData.map(item => item.user),
     datasets: [
       {
         label: 'Cost ($)',
-        data: data.map(item => item.cost),
+        data: filteredData.map(item => item.cost),
         backgroundColor: (context: any) => {
           const chart = context.chart;
           const { ctx, chartArea } = chart;
@@ -130,7 +108,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
         cornerRadius: 8,
         titleFont: {
           size: 14,
-          weight: 'bold',
+          weight: 'bold' as const,
         },
         bodyFont: {
           size: 13,
@@ -139,11 +117,11 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
         callbacks: {
           title: (tooltipItems: any) => {
             const index = tooltipItems[0].dataIndex;
-            return data[index].user;
+            return filteredData[index].user;
           },
           label: (context: any) => {
             const userIndex = context.dataIndex;
-            const userData = data[userIndex];
+            const userData = filteredData[userIndex];
             return [
               `Cost: $${context.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
               `Resources: ${userData.resources}`,
@@ -172,19 +150,22 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
         grid: {
           display: false,
         },
+        // CHANGED: Added rotation to make long usernames readable
         ticks: {
           color: 'rgb(107, 114, 128)',
           font: {
             size: 12,
           },
-          padding: 10,
+          padding: 5,
+          maxRotation: 45,
+          minRotation: 45,
+          autoSkip: false,
         },
       },
     },
   };
 
-  const maxCost = Math.max(...data.map(u => u.cost), 1);
-  const totalCost = data.reduce((sum, user) => sum + user.cost, 0);
+  const totalCost = filteredData.reduce((sum, user) => sum + user.cost, 0);
 
   const copyToClipboard = (resourceId: string) => {
     navigator.clipboard.writeText(resourceId);
@@ -214,182 +195,91 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
     }
   };
 
-  // Enhanced parsing function to handle various formats
   const parseResourcesList = (resourcesList: any, resourcesCount: number): string[] => {
-    console.log('Parsing resourcesList:', resourcesList);
-    console.log('Resources count:', resourcesCount);
-    
-    // Case 1: Already an array
     if (Array.isArray(resourcesList)) {
-      console.log('ResourcesList is already an array');
       return resourcesList;
     }
-    
-    // Case 2: Null or undefined
     if (resourcesList === null || resourcesList === undefined) {
-      console.log('ResourcesList is null or undefined');
       return [];
     }
-    
-    // Case 3: Empty string
     if (typeof resourcesList === 'string' && resourcesList.trim() === '') {
-      console.log('ResourcesList is an empty string');
       return [];
     }
-    
-    // Case 4: Try to parse as JSON or fix malformed JSON
     if (typeof resourcesList === 'string') {
       try {
-        // Try to clean up malformed JSON - the specific issue we're seeing
         let cleanJson = resourcesList.trim();
-        
-        // Check if it looks like an array but missing quotes
         if (cleanJson.startsWith('[') && cleanJson.endsWith(']')) {
-          // Extract content between brackets
           const content = cleanJson.substring(1, cleanJson.length - 1);
-          
-          // Split by commas and clean up each item
           const items = content.split(',').map(item => item.trim());
-          
-          // Process each item - add quotes if needed
           const processedItems = items.map(item => {
-            // If item doesn't have quotes and isn't empty, add them
             if (item.length > 0 && !item.startsWith('"') && !item.endsWith('"')) {
               return `"${item}"`;
             }
             return item;
           });
-          
-          // Reconstruct the JSON string
           const fixedJson = `[${processedItems.join(',')}]`;
-          console.log('Attempting to parse fixed JSON:', fixedJson);
-          
           const parsed = JSON.parse(fixedJson);
-          if (Array.isArray(parsed)) {
-            console.log('Successfully parsed fixed JSON array');
-            return parsed;
-          } else {
-            console.log('Parsed JSON is not an array, wrapping in array');
-            return [parsed];
-          }
-        }
-        
-        // Try normal JSON parsing
-        const parsed = JSON.parse(cleanJson);
-        if (Array.isArray(parsed)) {
-          console.log('Successfully parsed as JSON array');
-          return parsed;
-        } else {
-          console.log('Parsed JSON is not an array, wrapping in array');
+          if (Array.isArray(parsed)) return parsed;
           return [parsed];
         }
+        const parsed = JSON.parse(cleanJson);
+        if (Array.isArray(parsed)) return parsed;
+        return [parsed];
       } catch (e) {
-        console.log('JSON parsing failed, trying other methods');
-        
-        // Case 5: Try to split by commas (CSV format)
         if (resourcesList.includes(',')) {
-          // Handle the case where it looks like [item1, item2] but isn't valid JSON
           if (resourcesList.startsWith('[') && resourcesList.endsWith(']')) {
-            // Extract content between brackets and split
             const content = resourcesList.substring(1, resourcesList.length - 1);
-            const items = content.split(',').map(item => item.trim());
-            console.log('Extracted items from bracket notation:', items);
-            return items;
+            return content.split(',').map(item => item.trim());
           }
-          
-          // Regular CSV split
-          const csvArray = resourcesList.split(',').map(item => item.trim()).filter(item => item.length > 0);
-          console.log('Split by commas, got:', csvArray);
-          return csvArray;
+          return resourcesList.split(',').map(item => item.trim()).filter(item => item.length > 0);
         }
-        
-        // Case 6: Single resource (not an array)
-        if (resourcesList.length > 0) {
-          console.log('Treating as single resource');
-          return [resourcesList];
-        }
+        if (resourcesList.length > 0) return [resourcesList];
       }
     }
-    
-    // Case 7: Create placeholder resources based on count
     if (resourcesCount > 0) {
-      console.log('Creating placeholder resources based on count:', resourcesCount);
       return Array.from({ length: resourcesCount }, (_, i) => `Resource ${i + 1}`);
     }
-    
-    console.log('No resources found, returning empty array');
     return [];
   };
 
   const getCurrentUser = () => {
-    const user = data.find(user => user.user === viewingResourcesFor);
+    const user = filteredData.find(user => user.user === viewingResourcesFor);
     if (!user) return null;
     
-    console.log('Getting resources for user:', user.user);
-    console.log('Raw resourcesList:', user.resourcesList);
-    console.log('Type of resourcesList:', typeof user.resourcesList);
-    
     let resourcesList: string[] = [];
-    
-    // Try to parse resourcesList
     if (user.resourcesList !== null && user.resourcesList !== undefined) {
       resourcesList = parseResourcesList(user.resourcesList, user.resources);
     }
-    
-    // If we still don't have resources but have a CSV, try that
     if (resourcesList.length === 0 && user.resources_csv) {
-      console.log('Trying resources_csv');
       resourcesList = user.resources_csv.split(',').map(id => id.trim()).filter(id => id.length > 0);
     }
-    
-    // If we still don't have resources but have a count, create placeholders
     if (resourcesList.length === 0 && user.resources > 0) {
-      console.log('Creating placeholder resources');
       resourcesList = Array.from({ length: user.resources }, (_, i) => `Resource ${i + 1}`);
     }
-    
-    console.log('Final resourcesList:', resourcesList);
-    
-    return {
-      ...user,
-      resourcesList
-    };
+    return { ...user, resourcesList };
   };
 
   const filteredResources = getCurrentUser()?.resourcesList.filter(resource => 
     resource.toLowerCase().includes(resourceSearchTerm.toLowerCase())
   ) || [];
 
-  // Calculate statistics
-  const totalResources = data.reduce((sum, user) => sum + user.resources, 0);
-  const avgCostPerUser = data.length > 0 ? totalCost / data.length : 0;
+  const totalResources = filteredData.reduce((sum, user) => sum + user.resources, 0);
+  const avgCostPerUser = filteredData.length > 0 ? totalCost / filteredData.length : 0;
 
-  // Sort users based on the selected sort order
-  const sortedData = [...data].sort((a, b) => {
+  const sortedData = [...filteredData].sort((a, b) => {
     if (sortOrder === 'high-to-low') {
       return b.cost - a.cost;
-    } else {
-      return a.cost - b.cost;
     }
+    return a.cost - b.cost;
   });
 
-  // Export function for resources
   const exportResources = () => {
     const currentUser = getCurrentUser();
     if (!currentUser || !currentUser.resourcesList) return;
-    
-    const csvRows = [];
-    const headers = ['Resource ID', 'Resource Type'];
-    csvRows.push(headers.join(','));
-    
+    const csvRows = [['Resource ID', 'Resource Type'].join(',')];
     currentUser.resourcesList.forEach(resource => {
-      const row = [
-        `"${resource}"`,
-        `"${getResourceType(resource)}"`
-      ];
-      csvRows.push(row.join(','));
+      csvRows.push([`"${resource}"`, `"${getResourceType(resource)}"`].join(','));
     });
-    
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -415,17 +305,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
               <p className="text-indigo-200 text-sm">Cost distribution and resource ownership</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 text-indigo-200 hover:text-white hover:bg-indigo-500/20 rounded-lg transition-colors">
-              <RefreshCw className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-indigo-200 hover:text-white hover:bg-indigo-500/20 rounded-lg transition-colors">
-              <Settings className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-indigo-200 hover:text-white hover:bg-indigo-500/20 rounded-lg transition-colors">
-              <Download className="w-5 h-5" />
-            </button>
-          </div>
+          {/* The buttons have been removed from here */}
         </div>
       </div>
       
@@ -438,7 +318,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Users</div>
-              <div className="text-xl font-bold text-gray-900">{data.length}</div>
+              <div className="text-xl font-bold text-gray-900">{filteredData.length}</div>
             </div>
           </div>
         </div>
@@ -549,27 +429,17 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
           {/* User List Container - One by One Format */}
           <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
             {sortedData.map((user, index) => {
-              // Get resources list for this user
               let safeResourcesList: string[] = [];
-              
               if (user.resourcesList !== null && user.resourcesList !== undefined) {
                 safeResourcesList = parseResourcesList(user.resourcesList, user.resources);
               }
-              
-              // If we still don't have resources but have a CSV, try that
               if (safeResourcesList.length === 0 && user.resources_csv) {
                 safeResourcesList = user.resources_csv.split(',').map(id => id.trim()).filter(id => id.length > 0);
               }
-              
-              // If we still don't have resources but have a count, create placeholders
               if (safeResourcesList.length === 0 && user.resources > 0) {
                 safeResourcesList = Array.from({ length: user.resources }, (_, i) => `Resource ${i + 1}`);
               }
-              
-              // FIXED: Use total percentage for progress bar instead of max cost percentage
-              const totalPercentage = Math.round((user.cost / totalCost) * 100);
-              
-              // Add rank badge for sorted order
+              const totalPercentage = totalCost > 0 ? Math.round((user.cost / totalCost) * 100) : 0;
               const rankBadge = sortOrder === 'high-to-low' 
                 ? `#${index + 1}` 
                 : `#${sortedData.length - index}`;
@@ -621,7 +491,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
                         className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${totalPercentage}%` }} // FIXED: Use totalPercentage here
+                        style={{ width: `${totalPercentage}%` }}
                       />
                     </div>
                   </div>
@@ -634,15 +504,9 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                       disabled={user.resources === 0}
                     >
                       {viewingResourcesFor === user.user ? (
-                        <>
-                          <EyeOff className="w-4 h-4" />
-                          <span>Hide Resources</span>
-                        </>
+                        <><EyeOff className="w-4 h-4" /><span>Hide Resources</span></>
                       ) : (
-                        <>
-                          <Eye className="w-4 h-4" />
-                          <span>View Resources</span>
-                        </>
+                        <><Eye className="w-4 h-4" /><span>View Resources</span></>
                       )}
                     </button>
                     
@@ -650,11 +514,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                       onClick={() => setExpandedUser(expandedUser === user.user ? null : user.user)}
                       className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
                     >
-                      {expandedUser === user.user ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
+                      {expandedUser === user.user ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                   </div>
                   
@@ -672,7 +532,6 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span className="text-sm flex-shrink-0">{getResourceIcon(getResourceType(resource))}</span>
                                 <div className="min-w-0 flex-1">
-                                  {/* FIXED: Show full resource ARN with horizontal scroll */}
                                   <div className="text-sm font-medium text-gray-900 whitespace-nowrap overflow-x-auto py-1" title={resource}>
                                     {resource}
                                   </div>
@@ -718,7 +577,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
         </div>
       </div>
       
-      {/* Resources Modal/Panel - Simplified to only show available data */}
+      {/* Resources Modal/Panel */}
       {viewingResourcesFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -772,7 +631,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                 </div>
               </div>
               
-              {/* Resources Table - Simplified */}
+              {/* Resources Table */}
               <div className="flex-1 overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50 sticky top-0">
@@ -798,7 +657,6 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
                               <div className="flex items-center">
                                 <span className="mr-3 text-lg">{getResourceIcon(resourceType)}</span>
                                 <div className="min-w-0 flex-1">
-                                  {/* Show full resource ARN with horizontal scroll */}
                                   <div className="text-sm font-medium text-gray-900 whitespace-nowrap overflow-x-auto py-1" title={resource}>
                                     {resource}
                                   </div>
