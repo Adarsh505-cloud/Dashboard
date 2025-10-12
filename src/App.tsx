@@ -23,7 +23,6 @@ function App() {
     setAwsCredentials(null);
   };
 
-  // Handle the authentication states from the useAuth hook
   if (auth.isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-gray-700">
@@ -43,17 +42,15 @@ function App() {
     );
   }
 
-  // If authenticated, show the main application flow
   if (auth.isAuthenticated) {
     if (currentPage === 'inputs') {
-      return <InputsPage onGetDetails={handleGetDetails} />;
+      return <InputsPage onGetDetails={handleGetDetails} auth={auth} />;
     }
     if (currentPage === 'dashboard' && awsCredentials) {
       return <Dashboard credentials={awsCredentials} onBack={handleBackToInputs} />;
     }
   }
 
-  // If not authenticated, show a sign-in button
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">

@@ -1,9 +1,25 @@
+// src/components/InputsPage.tsx
 import React, { useState, useEffect } from 'react';
-import { Cloud, Shield, ArrowRight, Wifi, WifiOff, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import {
+  Cloud,
+  CheckCircle,
+  LogOut,
+  PlusCircle,
+  ChevronDown,
+  BookOpen,
+  Settings,
+  User,
+  Info,
+  KeyRound,
+  FileText
+} from 'lucide-react';
 import { apiService } from '../services/api';
+import ConnectAccountModal from './ConnectAccountModal';
+import { AuthContextProps } from 'react-oidc-context';
 
 interface InputsPageProps {
   onGetDetails: (accountId: string, roleArn: string) => void;
+  auth: AuthContextProps;
 }
 
 interface Account {
@@ -12,251 +28,200 @@ interface Account {
   name: string;
 }
 
-// Predefined list of accounts
 const predefinedAccounts: Account[] = [
   {
     id: '183631321229',
     roleArn: 'arn:aws:iam::183631321229:role/AWS-Cost-Analysis-Dashboard-Role',
     name: 'Titans Sandbox',
   },
-  // Add more accounts here if needed
 ];
 
-const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails }) => {
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(predefinedAccounts[0].id);
-  const [accountId, setAccountId] = useState<string>(predefinedAccounts[0].id);
-  const [roleArn, setRoleArn] = useState<string>(predefinedAccounts[0].roleArn);
-  const [isLoading, setIsLoading] = useState(false);
+const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
+  const [activeTab, setActiveTab] = useState('accounts');
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  // Sync account details when selection changes
   useEffect(() => {
-    const selected = predefinedAccounts.find(acc => acc.id === selectedAccountId);
-    if (selected) {
-      setAccountId(selected.id);
-      setRoleArn(selected.roleArn);
-    }
-  }, [selectedAccountId]);
-
-  // Check backend health on component mount
-  useEffect(() => {
-    const checkBackend = async () => {
-      try {
-        await apiService.checkHealth();
-        setBackendStatus('connected');
-        console.log('✅ Backend is available');
-      } catch (error) {
-        setBackendStatus('disconnected');
-        console.log('❌ Backend is not available:', error);
-      }
-    };
-
-    checkBackend();
+    apiService.checkHealth()
+      .then(() => setBackendStatus('connected'))
+      .catch(() => setBackendStatus('disconnected'));
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accountId.trim() || !roleArn.trim()) return;
-
-    setIsLoading(true);
-    console.log('🚀 Submitting credentials:', {
-      accountId: accountId.trim(),
-      roleArn: roleArn.trim().substring(0, 50) + '...'
-    });
-
-    // Brief loading delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setIsLoading(false);
-    onGetDetails(accountId.trim(), roleArn.trim());
+  const handleConnectNewAccount = (newAccountId: string, newRoleArn: string) => {
+    setIsModalOpen(false);
+    onGetDetails(newAccountId, newRoleArn);
+  };
+  
+  const user = auth.user?.profile;
+  
+  const cognitoConfig = {
+    domain: "YOUR_COGNITO_DOMAIN", // e.g., my-app.auth.us-west-2.amazoncognito.com
+    clientId: "641sh8j3j5iv62aot4ecnlpc3q", // Replace with your actual client ID
+    redirectUri: "https://cloudbillanalyzer.epiuse-aws.com",
   };
 
-  // Validation
-  const isValid = accountId.trim().length === 12 && roleArn.trim().includes('arn:aws:iam::');
-
-  // Status indicators
-  const getStatusIcon = () => {
-    switch (backendStatus) {
-      case 'checking':
-        return <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />;
-      case 'connected':
-        return <Wifi className="w-4 h-4 text-green-600" />;
-      case 'disconnected':
-        return <WifiOff className="w-4 h-4 text-red-600" />;
+  const handlePasswordReset = () => {
+    if (!cognitoConfig.domain.startsWith("YOUR_")) {
+        const url = `https://${cognitoConfig.domain}/forgotPassword?client_id=${cognitoConfig.clientId}&response_type=code&scope=email+openid+phone&redirect_uri=${cognitoConfig.redirectUri}`;
+        window.location.href = url;
+    } else {
+        alert("Cognito domain is not configured. Please update it in InputsPage.tsx.");
     }
   };
 
-  const getStatusText = () => {
-    switch (backendStatus) {
-      case 'checking':
-        return 'Checking backend connection...';
-      case 'connected':
-        return 'Backend connected - Ready to fetch AWS data';
-      case 'disconnected':
-        return 'Backend disconnected - Please start the backend server';
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (backendStatus) {
-      case 'checking':
-        return 'text-yellow-700 bg-yellow-50 border-yellow-200';
-      case 'connected':
-        return 'text-green-700 bg-green-50 border-green-200';
-      case 'disconnected':
-        return 'text-red-700 bg-red-50 border-red-200';
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'accounts':
+        return (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Cloud Accounts</h1>
+            <p className="mt-2 text-gray-600">Analyze onboarded accounts or connect a new one.</p>
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {predefinedAccounts.map(acc => (
+                <div key={acc.id} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                       <FileText className="w-6 h-6 text-blue-500" />
+                       <div>
+                         <h3 className="text-lg font-semibold text-gray-900">{acc.name}</h3>
+                         <p className="text-sm text-gray-500 font-mono">{acc.id}</p>
+                       </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onGetDetails(acc.id, acc.roleArn)}
+                    className="w-full mt-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Analyze
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-white p-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-colors flex flex-col items-center justify-center"
+              >
+                <PlusCircle className="w-8 h-8 text-gray-400 mb-2" />
+                <span className="font-semibold text-gray-700">Onboard a New Account</span>
+              </button>
+            </div>
+          </div>
+        );
+      case 'profile':
+        return (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">User Profile</h1>
+            <p className="mt-2 text-gray-600">Manage your account settings.</p>
+            <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm max-w-lg">
+                <div className="mb-4">
+                    <label className="text-sm font-medium text-gray-500">Email</label>
+                    <p className="text-lg font-semibold text-gray-800">{user?.email}</p>
+                </div>
+                <div className="pt-4 border-t">
+                    <h3 className="font-semibold text-gray-800 mb-2">Security</h3>
+                     <button
+                        onClick={handlePasswordReset}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-100 rounded-lg hover:bg-blue-200"
+                    >
+                        <KeyRound className="w-4 h-4" />
+                        Reset Password
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2">You will be redirected to a secure page to reset your password.</p>
+                </div>
+            </div>
+          </div>
+        );
+      case 'about':
+        return (
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">About</h1>
+            <p className="mt-2 text-gray-600">Information about this application.</p>
+            <div className="mt-8 bg-white p-6 rounded-xl border border-gray-200 shadow-sm max-w-lg">
+                <h3 className="text-lg font-semibold text-gray-800">AWS Cost Analysis Dashboard</h3>
+                <p className="text-gray-600 mt-2">This application provides comprehensive insights into your AWS spending patterns, helping you identify opportunities for cost optimization. By securely connecting to your AWS account via a read-only IAM role, it visualizes cost data across services, regions, users, and projects.</p>
+                <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm text-gray-700"><strong>Version:</strong> 1.0.0</p>
+                </div>
+            </div>
+          </div>
+        );
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="w-full max-w-2xl">
-        {/* Header Section */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl mb-5 shadow-lg">
-            <Cloud className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">
-            AWS Cost Analysis Dashboard
-          </h1>
-          <p className="text-lg text-gray-600 max-w-lg mx-auto">
-            Get comprehensive insights into your AWS spending patterns and optimize your cloud costs
-          </p>
-        </div>
-
-        {/* Backend Status */}
-        <div className={`mb-6 p-4 rounded-xl border ${getStatusColor()} transition-all duration-300`}>
-          <div className="flex items-center gap-3">
-            {getStatusIcon()}
-            <span className="text-sm font-medium">{getStatusText()}</span>
-          </div>
-        </div>
-
-        {/* Main Card */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 transition-all duration-300 hover:shadow-2xl">
-          {/* Card Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white">
-            <div className="flex items-center gap-3 mb-2">
-              <Shield className="w-6 h-6" />
-              <h2 className="text-2xl font-semibold">Connect Your AWS Account</h2>
+    <>
+      {isModalOpen && <ConnectAccountModal onClose={() => setIsModalOpen(false)} onConnect={handleConnectNewAccount} />}
+      <div className="flex h-screen bg-gray-100 font-sans">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+          <div className="flex items-center gap-3 p-4 border-b h-16">
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+              <Cloud className="w-5 h-5 text-white" />
             </div>
-            <p className="text-blue-100">
-              Select your account to analyze cost data securely
-            </p>
+            <span className="font-bold text-lg text-gray-800">Cost Analyzer</span>
           </div>
-
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Account Selection */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Select Account
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedAccountId}
-                  onChange={(e) => setSelectedAccountId(e.target.value)}
-                  className="w-full px-5 py-4 text-lg border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 outline-none appearance-none bg-white"
-                >
-                  {predefinedAccounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name} — {acc.id}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">
-                  <svg className="fill-current h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Account Details Card */}
-            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200 transition-all duration-300 hover:border-blue-300">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Info className="w-4 h-4 text-blue-500" />
-                Account Details
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Account ID</p>
-                  <p className="font-mono font-medium text-gray-900 bg-white px-3 py-2 rounded-lg border border-gray-200">
-                    {accountId}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">IAM Role ARN</p>
-                  <p className="font-mono text-sm text-gray-700 bg-white px-3 py-2 rounded-lg border border-gray-200 break-all">
-                    {roleArn}
-                  </p>
-                </div>
-              </div>
-              <p className="mt-4 text-xs text-gray-500 italic">
-                This account is pre-approved for cost analysis with the required permissions.
-              </p>
-            </div>
-
-            {/* Status Messages */}
-            {backendStatus === 'disconnected' && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl transition-all duration-300">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-amber-800 mb-1">Backend Server Required</p>
-                    <p className="text-amber-700">
-                      The backend server is not running. Please start the backend server to fetch real AWS data.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {backendStatus === 'connected' && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-xl transition-all duration-300">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-800 mb-1">Backend Connected</p>
-                    <p className="text-green-700">
-                      Ready to fetch real AWS cost data with your selected account.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={!isValid || isLoading}
-              className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3 shadow-md ${
-                isValid && !isLoading
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white hover:shadow-lg transform hover:-translate-y-0.5'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  Analyze AWS Costs
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
+          <nav className="flex-1 p-4 space-y-1">
+            <button onClick={() => setActiveTab('accounts')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${activeTab === 'accounts' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Cloud className="w-5 h-5" />
+              <span>Accounts</span>
             </button>
-          </form>
-        </div>
+            <div className="pt-4 mt-2 border-t">
+                <h3 className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Settings</h3>
+                <button onClick={() => setActiveTab('profile')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${activeTab === 'profile' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    <User className="w-5 h-5" />
+                    <span>User Profile</span>
+                </button>
+                 <button onClick={() => setActiveTab('about')} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${activeTab === 'about' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    <Info className="w-5 h-5" />
+                    <span>About</span>
+                </button>
+            </div>
+          </nav>
+        </aside>
 
-        {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-gray-500">
-            🔒 Your credentials are processed securely and never stored
-          </p>
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between h-16">
+            <div></div>
+            <div className="relative">
+              <button 
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100"
+              >
+                {backendStatus === 'connected' && <div className="w-2.5 h-2.5 bg-green-500 rounded-full" title="Backend Connected"></div>}
+                {backendStatus === 'disconnected' && <div className="w-2.5 h-2.5 bg-red-500 rounded-full" title="Backend Disconnected"></div>}
+                <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">
+                  {user?.email?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-gray-800">{user?.email}</p>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border z-10">
+                  <button
+                    onClick={() => auth.signoutRedirect()}
+                    className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto p-8">
+            {renderContent()}
+          </main>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
