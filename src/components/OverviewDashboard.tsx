@@ -26,6 +26,8 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
+// NEW: Import the CarbonFootprintMap component
+import CarbonFootprintMap from './CarbonFootprintMap';
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -59,6 +61,8 @@ interface OverviewDashboardProps {
 }
 
 const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
+  // ... (all existing code from your component remains the same up to the return statement)
+  
   // Filter out regions with zero cost
   const filteredRegionCosts = data.regionCosts.filter(region => region.cost > 0);
 
@@ -232,6 +236,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
       },
     },
   };
+
 
   return (
     <div className="space-y-8">
@@ -495,7 +500,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* NOTE: TopSpendingResources removed from Overview page */}
+      {/* NEW: Carbon Footprint Map Widget */}
+      <div className="col-span-1 lg:col-span-2">
+        <CarbonFootprintMap />
+      </div>
 
     </div>
   );
