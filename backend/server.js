@@ -1,32 +1,24 @@
+// backend/server.js
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import serverless from 'serverless-http'; // Added for Lambda compatibility
+import serverless from 'serverless-http';
 import costRoutes from './routes/cost.js';
+import accountRoutes from './routes/accounts.js'; // <-- Import new route
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
 
 const app = express();
-
-// Security middleware
 app.use(helmet());
-
-// Note: Rate limiting is typically handled by API Gateway in a serverless setup.
-// The express-rate-limit middleware is removed as it's less effective here.
-
-// CORS configuration for production
 app.use(cors({
-  origin: 'https://cloudbillanalyzer.epiuse-aws.com', // Hardcoded for production
+  origin: 'https://cloudbillanalyzer.epiuse-aws.com',
   credentials: true,
 }));
-
-// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -37,14 +29,11 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/cost', costRoutes);
+app.use('/api/accounts', accountRoutes); // <-- Add new route
 
-// Error handling middleware
 app.use(errorHandler);
-
-// 404 handler for serverless environment
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Export the handler for AWS Lambda instead of listening on a port
 export const handler = serverless(app);
