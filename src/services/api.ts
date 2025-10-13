@@ -126,8 +126,8 @@ class ApiService {
     return this.makeRequest(`${API_GATEWAY_URL}/api/users`, userData, 'POST');
   }
 
-  async updateUserRole(userId: string, newRole: 'Admins' | 'Viewers'): Promise<ApiResponse<any>> {
-    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${userId}/role`, { newRole }, 'PUT');
+  async updateUserRole(username: string, newRole: 'Admins' | 'Viewers'): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${username}/role`, { newRole }, 'PUT');
   }
 
   async getUserAccountMappings(userId: string): Promise<ApiResponse<string[]>> {
