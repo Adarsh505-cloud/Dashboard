@@ -1,7 +1,7 @@
 // backend/routes/accounts.js
 import express from 'express';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, PutCommand, QueryCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, QueryCommand, BatchGetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { authenticateUser, isAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -17,8 +17,7 @@ router.get('/', authenticateUser, async (req, res, next) => {
       const command = new ScanCommand({ TableName: "OnboardedAccounts" });
       const { Items } = await docClient.send(command);
       return res.json({ success: true, data: Items || [] });
-    } 
-    
+    }
     // Viewers get only their assigned accounts
     else {
       // 1. Get the account IDs assigned to this user from UserAccountMappings
@@ -64,6 +63,27 @@ router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
     await docClient.send(command);
     res.status(201).json({ success: true, data: { accountId, roleArn, name } });
   } catch (error) { next(error); }
+});
+
+// DELETE /api/accounts/:accountId - Delete an account (Admins only)
+router.delete('/:accountId', authenticateUser, isAdmin, async (req, res, next) => {
+    const { accountId } = req.params;
+    if (!accountId) {
+        return res.status(400).json({ error: 'Account ID is required' });
+    }
+
+    try {
+        const command = new DeleteCommand({
+            TableName: "OnboardedAccounts",
+            Key: {
+                accountId: accountId
+            }
+        });
+        await docClient.send(command);
+        res.status(200).json({ success: true, message: 'Account deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
 });
 
 export default router;

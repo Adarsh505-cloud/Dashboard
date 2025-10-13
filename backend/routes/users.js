@@ -1,7 +1,7 @@
 // backend/routes/users.js
 import express from 'express';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { CognitoIdentityProviderClient, ListUsersCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand, AdminListGroupsForUserCommand, AdminRemoveUserFromGroupCommand } from "@aws-sdk/client-cognito-identity-provider";
+import { CognitoIdentityProviderClient, ListUsersCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand, AdminListGroupsForUserCommand, AdminRemoveUserFromGroupCommand, AdminDeleteUserCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBDocumentClient, QueryCommand, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { authenticateUser, isAdmin } from '../middleware/authMiddleware.js';
 
@@ -130,6 +130,25 @@ router.put('/:userId/accounts', authenticateUser, isAdmin, async (req, res, next
         }
         res.json({ success: true, message: `Successfully updated accounts for user` });
     } catch (error) { next(error); }
+});
+
+// DELETE /api/users/:username - Delete a user (Admins only)
+router.delete('/:username', authenticateUser, isAdmin, async (req, res, next) => {
+    const { username } = req.params;
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+
+    try {
+        const command = new AdminDeleteUserCommand({
+            UserPoolId: userPoolId,
+            Username: username
+        });
+        await cognitoClient.send(command);
+        res.status(200).json({ success: true, message: 'User deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
 });
 
 export default router;

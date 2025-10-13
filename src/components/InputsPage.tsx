@@ -10,7 +10,8 @@ import {
   KeyRound,
   Database,
   Loader,
-  Users, // Keep Users for the sidebar
+  Users,
+  Trash2,
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import ConnectAccountModal from './ConnectAccountModal';
@@ -70,13 +71,13 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
       .catch(() => setBackendStatus('disconnected'));
   }, []);
 
-  const handleConnectNewAccount = async (newAccountId: string, newRoleArn: string) => {
+  const handleConnectNewAccount = async (newAccountId: string, newRoleArn: string, newAccountName: string) => {
     setIsModalOpen(false);
     
     const newAccount = {
-      id: newAccountId,
+      accountId: newAccountId,
       roleArn: newRoleArn,
-      name: `Account ${newAccountId.slice(-4)}`,
+      name: newAccountName,
     };
 
     try {
@@ -108,6 +109,28 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
     }
   };
 
+  const handleSignOut = () => {
+    const logoutUrl = "https://cloudbillanalyzer.epiuse-aws.com";
+    auth.signoutRedirect({
+        extraQueryParams: {
+            client_id: auth.settings.client_id,
+            logout_uri: logoutUrl,
+        },
+    });
+  };
+
+  const handleRemoveAccount = async (accountId: string) => {
+    if (window.confirm("Are you sure you want to remove this account?")) {
+        try {
+            await apiService.deleteOnboardedAccount(accountId);
+            setAccounts(prev => prev.filter(acc => acc.accountId !== accountId));
+        } catch (error) {
+            console.error("Failed to delete account:", error);
+            alert("Failed to remove account. Please check the console.");
+        }
+    }
+  };
+
   const renderContent = () => {
     if (isLoadingAccounts) {
         return (
@@ -119,7 +142,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
     }
     switch (activeTab) {
       case 'accounts':
-        return <AccountsTab accounts={accounts} isAdmin={isAdmin} onGetDetails={onGetDetails} onModalOpen={() => setIsModalOpen(true)} />;
+        return <AccountsTab accounts={accounts} isAdmin={isAdmin} onGetDetails={onGetDetails} onModalOpen={() => setIsModalOpen(true)} onRemoveAccount={handleRemoveAccount} />;
       case 'profile':
         return <ProfileTab onPasswordReset={handlePasswordReset} />;
       case 'users':
@@ -172,7 +195,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
               </button>
               {isUserMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border z-10 animate-in">
-                  <button onClick={() => auth.signoutRedirect()} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                  <button onClick={handleSignOut} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
                     <LogOut className="w-4 h-4" />
                     <span>Logout</span>
                   </button>
@@ -197,7 +220,7 @@ const SidebarButton = ({ text, icon: Icon, active, onClick }: any) => (
     </button>
 );
 
-const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string) => void, onModalOpen: () => void }) => (
+const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAccount }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string) => void, onModalOpen: () => void, onRemoveAccount: (id: string) => void }) => (
     <div>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
             <div className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg">
@@ -226,12 +249,22 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen }: { account
                             </span>
                         </div>
                     </div>
-                    <button
-                        onClick={() => onGetDetails(acc.accountId, acc.roleArn)}
-                        className="w-full mt-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        Analyze
-                    </button>
+                    <div className="flex gap-2 mt-6">
+                        <button
+                            onClick={() => onGetDetails(acc.accountId, acc.roleArn)}
+                            className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Analyze
+                        </button>
+                        {isAdmin &&
+                            <button
+                                onClick={() => onRemoveAccount(acc.accountId)}
+                                className="p-2.5 bg-red-100 text-red-600 font-semibold rounded-lg hover:bg-red-200 transition-colors"
+                            >
+                                <Trash2 className="w-5 h-5"/>
+                            </button>
+                        }
+                    </div>
                 </div>
             ))}
             {isAdmin && (

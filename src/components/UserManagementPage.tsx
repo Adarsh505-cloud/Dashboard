@@ -1,7 +1,7 @@
 // src/components/UserManagementPage.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../services/api';
-import { Loader, Edit, UserPlus, ChevronDown } from 'lucide-react';
+import { Loader, Edit, UserPlus, ChevronDown, Trash2 } from 'lucide-react';
 import ManageAccessModal from './ManageAccessModal';
 import CreateUserModal from './CreateUserModal';
 
@@ -47,6 +47,18 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ allAccounts }) 
     } catch (error) {
         console.error("Failed to update role:", error);
         alert("Failed to update user role.");
+    }
+  };
+
+  const handleDeleteUser = async (username: string) => {
+    if (window.confirm(`Are you sure you want to delete user ${username}? This action cannot be undone.`)) {
+        try {
+            await apiService.deleteUser(username);
+            fetchUsers();
+        } catch (error) {
+            console.error("Failed to delete user:", error);
+            alert("Failed to delete user. Please check the console.");
+        }
     }
   };
 
@@ -104,9 +116,14 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ allAccounts }) 
                       <td className="px-6 py-4"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{user.status}</span></td>
                       <td className="px-6 py-4 text-sm text-gray-500">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
                       <td className="px-6 py-4 text-right text-sm font-medium">
-                        <button onClick={() => handleManageAccess(user)} className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 ml-auto">
-                          <Edit className="w-4 h-4" /> Manage Access
-                        </button>
+                        <div className="flex gap-4 justify-end">
+                            <button onClick={() => handleManageAccess(user)} className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 ml-auto">
+                              <Edit className="w-4 h-4" /> Manage Access
+                            </button>
+                            <button onClick={() => handleDeleteUser(user.username)} className="text-red-600 hover:text-red-900 flex items-center gap-1 ml-auto">
+                                <Trash2 className="w-4 h-4" /> Delete
+                            </button>
+                        </div>
                       </td>
                     </tr>
                   );

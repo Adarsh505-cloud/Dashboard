@@ -81,7 +81,7 @@ class ApiService {
 
     try {
       const response = await fetch(url, {
-        method: body ? method : 'GET',
+        method: method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -108,13 +108,12 @@ class ApiService {
     return this.makeRequest(`${API_GATEWAY_URL}/api/accounts`, undefined, 'GET');
   }
 
-  async saveOnboardedAccount(account: { id: string; roleArn: string; name: string }): Promise<ApiResponse<OnboardedAccount>> {
-    const payload = { 
-        accountId: account.id, 
-        roleArn: account.roleArn, 
-        name: account.name 
-    };
-    return this.makeRequest(`${API_GATEWAY_URL}/api/accounts`, payload, 'POST');
+  async saveOnboardedAccount(account: { accountId: string; roleArn: string; name: string }): Promise<ApiResponse<OnboardedAccount>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/accounts`, account, 'POST');
+  }
+
+  async deleteOnboardedAccount(accountId: string): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/accounts/${accountId}`, undefined, 'DELETE');
   }
   
   // --- USER MANAGEMENT METHODS ---
@@ -124,6 +123,10 @@ class ApiService {
 
   async createUser(userData: { email: string; username: string; temporaryPassword: string; role: 'Admins' | 'Viewers' }): Promise<ApiResponse<any>> {
     return this.makeRequest(`${API_GATEWAY_URL}/api/users`, userData, 'POST');
+  }
+
+  async deleteUser(username: string): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${username}`, undefined, 'DELETE');
   }
 
   async updateUserRole(username: string, newRole: 'Admins' | 'Viewers'): Promise<ApiResponse<any>> {
