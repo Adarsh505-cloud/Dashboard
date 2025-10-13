@@ -7,12 +7,15 @@ import {
   ChevronDown,
   User,
   Info,
+  KeyRound,
   Database,
   Loader,
+  Users, // Keep Users for the sidebar
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import ConnectAccountModal from './ConnectAccountModal';
 import { AuthContextProps } from 'react-oidc-context';
+import UserManagementPage from './UserManagementPage';
 
 // --- PROPS AND TYPES ---
 interface InputsPageProps {
@@ -119,6 +122,11 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
         return <AccountsTab accounts={accounts} isAdmin={isAdmin} onGetDetails={onGetDetails} onModalOpen={() => setIsModalOpen(true)} />;
       case 'profile':
         return <ProfileTab onPasswordReset={handlePasswordReset} />;
+      case 'users':
+        if (isAdmin) {
+          return <UserManagementPage allAccounts={accounts} />;
+        }
+        return null;
       case 'about':
         return <AboutTab />;
       default:
@@ -139,6 +147,9 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
           </div>
           <nav className="flex-1 p-4 space-y-1">
             <SidebarButton text="Accounts" icon={Cloud} active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')} />
+            {isAdmin && (
+              <SidebarButton text="User Management" icon={Users} active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+            )}
             <div className="pt-4 mt-2 border-t">
                 <h3 className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Settings</h3>
                 <SidebarButton text="User Profile" icon={User} active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
@@ -188,7 +199,7 @@ const SidebarButton = ({ text, icon: Icon, active, onClick }: any) => (
 
 const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string) => void, onModalOpen: () => void }) => (
     <div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
             <div className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg">
                 <Database className="w-7 h-7 opacity-50 mb-4"/>
                 <p className="text-sm">Total Onboarded Accounts</p>
@@ -207,10 +218,17 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen }: { account
                              <p className="text-sm text-gray-500 font-mono">{acc.accountId}</p>
                            </div>
                         </div>
+                        <div className="flex justify-between items-center text-sm border-t pt-4">
+                            <span>Status:</span>
+                            <span className="flex items-center gap-1.5 font-semibold text-green-600">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                Active
+                            </span>
+                        </div>
                     </div>
                     <button
                         onClick={() => onGetDetails(acc.accountId, acc.roleArn)}
-                        className="w-full mt-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                        className="w-full mt-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                     >
                         Analyze
                     </button>
@@ -257,9 +275,7 @@ const AboutTab = () => (
       <h1 className="text-3xl font-bold text-gray-900">About</h1>
       <p className="mt-2 text-gray-600">Information about this application.</p>
       <div className="mt-8 bg-white p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
-          <h3 className="font-bold text-xl mb-4">AWS Cost Analysis Dashboard</h3>
-          <p className="text-gray-600 mb-6">This tool securely connects to your AWS account to provide comprehensive insights into your cloud spending, helping you identify opportunities for cost optimization.</p>
-          <div className="mt-4 pt-4 border-t">
+          <div className="mt-4">
               <p className="text-sm text-gray-700 font-mono">Version: 1.0.0</p>
           </div>
       </div>

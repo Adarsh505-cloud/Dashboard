@@ -41,7 +41,6 @@ export interface OnboardedAccount {
     name: string;
 }
 
-
 // --- CONFIGURATION ---
 const API_GATEWAY_URL = 'https://yxxc6buhjk.execute-api.us-west-2.amazonaws.com';
 
@@ -67,7 +66,6 @@ const getAuthHeader = (): string => {
     }
     return '';
 };
-
 
 // --- API SERVICE CLASS ---
 class ApiService {
@@ -116,6 +114,19 @@ class ApiService {
     };
     return this.makeRequest(`${API_GATEWAY_URL}/api/accounts`, payload, 'POST');
   }
+  
+  // --- USER MANAGEMENT METHODS ---
+  async getUsers(): Promise<ApiResponse<any[]>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users`, undefined, 'GET');
+  }
+
+  async getUserAccountMappings(userId: string): Promise<ApiResponse<string[]>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${userId}/accounts`, undefined, 'GET');
+  }
+
+  async updateUserAccountMappings(userId: string, accountIds: string[]): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${userId}/accounts`, { accountIds }, 'PUT');
+  }
 
   // --- EXISTING METHODS ---
   async getComprehensiveAnalysis(credentials: ApiCredentials) {
@@ -130,7 +141,6 @@ class ApiService {
   }
   
   async checkHealth(): Promise<{ status: string; timestamp: string; environment: string }> {
-    // This endpoint returns the object directly, not wrapped in { success, data }
     return this.makeRequest(`${API_GATEWAY_URL}/health`, undefined, 'GET');
   }
 }
