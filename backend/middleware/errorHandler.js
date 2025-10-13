@@ -1,5 +1,18 @@
 export const errorHandler = (error, req, res, next) => {
-  console.error('❌ Error:', error);
+  // Enhanced logging for CloudWatch: Log the full error object and request details
+  console.error('[ERROR HANDLER] Caught an exception:', JSON.stringify({
+    error: {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    },
+    request: {
+      method: req.method,
+      url: req.originalUrl,
+      body: req.body,
+      headers: req.headers,
+    }
+  }, null, 2));
 
   // AWS SDK errors
   if (error.name === 'InvalidClientTokenId' || error.message?.includes('InvalidClientTokenId')) {
@@ -121,6 +134,8 @@ export const errorHandler = (error, req, res, next) => {
       : error.message,
     code: 'INTERNAL_ERROR',
     suggestion: 'If this error persists, please check the server logs for more details.',
-    details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    // Add request ID for easier log tracing in CloudWatch
+    requestId: req.apiGateway ? req.apiGateway.context.awsRequestId : 'unknown',
   });
 };
