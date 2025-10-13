@@ -41,12 +41,13 @@ export interface OnboardedAccount {
     name: string;
 }
 
+
 // --- CONFIGURATION ---
 const API_GATEWAY_URL = 'https://yxxc6buhjk.execute-api.us-west-2.amazonaws.com';
 
 export const cognitoAuthConfig = {
   authority: "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: "641sh8j3j5iv62aot4ecnlpc3q", // IMPORTANT: Replace with your actual Client ID
+  client_id: "641sh8j3j5iv62aot4ecnlpc3q", // Your actual Client ID
 };
 
 // --- HELPER TO GET AUTH TOKEN ---
@@ -66,6 +67,7 @@ const getAuthHeader = (): string => {
     }
     return '';
 };
+
 
 // --- API SERVICE CLASS ---
 class ApiService {
@@ -118,6 +120,14 @@ class ApiService {
   // --- USER MANAGEMENT METHODS ---
   async getUsers(): Promise<ApiResponse<any[]>> {
     return this.makeRequest(`${API_GATEWAY_URL}/api/users`, undefined, 'GET');
+  }
+
+  async createUser(userData: { email: string; username: string; temporaryPassword: string; role: 'Admins' | 'Viewers' }): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users`, userData, 'POST');
+  }
+
+  async updateUserRole(userId: string, newRole: 'Admins' | 'Viewers'): Promise<ApiResponse<any>> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/users/${userId}/role`, { newRole }, 'PUT');
   }
 
   async getUserAccountMappings(userId: string): Promise<ApiResponse<string[]>> {
