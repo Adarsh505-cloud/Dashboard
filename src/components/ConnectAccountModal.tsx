@@ -4,12 +4,13 @@ import { X, Download, Shield, Info, Copy, Check } from 'lucide-react';
 
 interface ConnectAccountModalProps {
   onClose: () => void;
-  onConnect: (accountId: string, roleArn: string) => void;
+  onConnect: (accountId: string, roleArn: string, accountName: string) => void;
 }
 
 const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onConnect }) => {
   const [newAccountId, setNewAccountId] = useState('');
   const [newRoleArn, setNewRoleArn] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [copied, setCopied] = useState(false);
 
   const webAppAccountId = "183631321229"; // Your backend's AWS Account ID
@@ -22,7 +23,7 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onConnect(newAccountId, newRoleArn);
+    onConnect(newAccountId, newRoleArn, accountName);
   };
 
   return (
@@ -99,6 +100,17 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
 
           {/* Input Form */}
           <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Production Account"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Your AWS Account ID</label>
               <input
