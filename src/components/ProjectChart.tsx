@@ -47,6 +47,7 @@ interface ProjectCost {
 
 interface ProjectChartProps {
   data: ProjectCost[];
+  isExporting: boolean;
 }
 
 const parseResourcesList = (resourcesList: any, resourcesCount: number): string[] => {
@@ -105,7 +106,7 @@ const parseResourcesList = (resourcesList: any, resourcesCount: number): string[
   return [];
 };
 
-const ProjectChart: React.FC<ProjectChartProps> = ({ data }) => {
+const ProjectChart: React.FC<ProjectChartProps> = ({ data, isExporting }) => {
   const processedData = data.map(item => ({
     ...item,
     project: item.project === '<UNMAPPED>' || item.project === 'UNMAPPED' ? 'Others' : item.project
@@ -152,6 +153,7 @@ const ProjectChart: React.FC<ProjectChartProps> = ({ data }) => {
   const options: any = { // Use 'any' to bypass strict type checking for complex chart options
     responsive: true,
     maintainAspectRatio: false,
+    animation: isExporting ? false : {},
     plugins: {
       legend: { display: false },
       tooltip: {

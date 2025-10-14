@@ -95,7 +95,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   };
   
   const cognitoConfig = {
-    domain: "https://us-west-2xf0vqvyuh.auth.us-west-2.amazoncognito.com",
+    domain: "us-west-2xf0vqvyuh.auth.us-west-2.amazoncognito.com", // <-- FIX: Removed https://
     clientId: "641sh8j3j5iv62aot4ecnlpc3q",
     redirectUri: "https://cloudbillanalyzer.epiuse-aws.com",
   };
@@ -108,7 +108,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
         alert("Cognito domain is not configured. Please update it in InputsPage.tsx.");
     }
   };
-
+  
   const handleSignOut = () => {
     const logoutUrl = "https://cloudbillanalyzer.epiuse-aws.com";
     auth.signoutRedirect({

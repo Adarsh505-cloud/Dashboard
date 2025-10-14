@@ -1,3 +1,4 @@
+// src/components/UserCostChart.tsx
 import React, { useState, useEffect } from 'react';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -43,9 +44,10 @@ interface UserCost {
 
 interface UserCostChartProps {
   data: UserCost[];
+  isExporting: boolean;
 }
 
-const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
+const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [viewingResourcesFor, setViewingResourcesFor] = useState<string | null>(null);
   const [copiedResource, setCopiedResource] = useState<string | null>(null);
@@ -96,6 +98,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data }) => {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: isExporting ? false : {},
     plugins: {
       legend: {
         display: false,
