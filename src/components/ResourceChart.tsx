@@ -94,6 +94,7 @@ interface ResourceChartProps {
   dailyCostData?: DailyCostData[];
   weeklyCostData?: WeeklyCostData[];
   topSpendingResources?: TopSpendingResource[];
+  isExporting: boolean;
 }
 
 interface ProcessedCostData {
@@ -102,7 +103,7 @@ interface ProcessedCostData {
 }
 
 // ------- Component -------
-const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, weeklyCostData, topSpendingResources }) => {
+const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, weeklyCostData, topSpendingResources, isExporting }) => {
   const [timeRange, setTimeRange] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [chartType, setChartType] = useState<'line' | 'bar' | 'doughnut'>('line');
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
@@ -291,6 +292,7 @@ const ResourceChart: React.FC<ResourceChartProps> = ({ data, dailyCostData, week
     const baseOptions = {
       responsive: true,
       maintainAspectRatio: false,
+      animation: isExporting ? false : {},
       plugins: {
         legend: {
           position: 'top' as const,

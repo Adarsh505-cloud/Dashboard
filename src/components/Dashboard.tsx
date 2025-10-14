@@ -44,13 +44,20 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     if (!dashboardRef.current || !data) return;
     
     setIsExporting(true);
-    try {
-      await exportToPDF(dashboardRef.current, credentials.accountId);
-    } catch (error) {
-      console.error('Export failed:', error);
-    } finally {
-      setIsExporting(false);
-    }
+    // Use a short timeout to allow the UI to re-render with animations disabled
+    setTimeout(async () => {
+        if (dashboardRef.current) {
+            try {
+                await exportToPDF(dashboardRef.current, credentials.accountId);
+            } catch (error) {
+                console.error('Export failed:', error);
+            } finally {
+                setIsExporting(false);
+            }
+        } else {
+            setIsExporting(false);
+        }
+    }, 100);
   };
 
   const getCurrentDateTime = () => {
@@ -152,9 +159,9 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               Fetching real-time cost analysis from your AWS account. This may take a few moments...
             </p>
             <div className="bg-blue-100 rounded-lg p-4 text-sm text-blue-800">
-              <p>• Connecting to AWS Cost Explorer API</p>
-              <p>• Retrieving daily and weekly cost data</p>
-              <p>• Analyzing resource utilization patterns</p>
+              <p>• Querying AWS CUR data via Athena</p>
+              <p>• Retrieving daily and weekly cost trends</p>
+              <p>• Analyzing resource ownership and utilization</p>
               <p>• Generating optimization recommendations</p>
             </div>
           </div>
@@ -384,18 +391,19 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         </div>
         {/* Dashboard Content */}
         <div ref={dashboardRef} className="space-y-8">
-          {activeTab === 'overview' && <OverviewDashboard data={data} />}
-          {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={credentials} />}
-          {activeTab === 'users' && <UserCostChart data={data.userCosts} />}
+          {activeTab === 'overview' && <OverviewDashboard data={data} isExporting={isExporting} />}
+          {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={credentials} isExporting={isExporting} />}
+          {activeTab === 'users' && <UserCostChart data={data.userCosts} isExporting={isExporting} />}
           {activeTab === 'resources' && (
             <ResourceChart 
               data={data.resourceCosts} 
               dailyCostData={data.dailyCostData}
               weeklyCostData={data.weeklyCostData}
               topSpendingResources={mappedTop}
+              isExporting={isExporting}
             />
           )}
-          {activeTab === 'projects' && <ProjectChart data={data.projectCosts} />}
+          {activeTab === 'projects' && <ProjectChart data={data.projectCosts} isExporting={isExporting} />}
           {activeTab === 'recommendations' && <RecommendationsPanel data={data.recommendations} />}
         </div>
       </div>

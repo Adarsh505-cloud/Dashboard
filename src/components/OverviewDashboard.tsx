@@ -58,9 +58,10 @@ interface OverviewData {
 
 interface OverviewDashboardProps {
   data: OverviewData;
+  isExporting: boolean;
 }
 
-const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
+const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting }) => {
   // ... (all existing code from your component remains the same up to the return statement)
   
   // Filter out regions with zero cost
@@ -191,6 +192,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: isExporting ? false : {},
     plugins: {
       legend: {
         display: false,
@@ -209,6 +211,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data }) => {
   const lineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: isExporting ? false : {},
     plugins: {
       legend: {
         display: false,

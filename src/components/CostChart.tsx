@@ -34,6 +34,7 @@ interface CostChartProps {
     accountId: string;
     roleArn: string;
   };
+  isExporting: boolean;
 }
 
 interface GroupedService {
@@ -47,7 +48,7 @@ interface GroupedService {
   isExpanded: boolean;
 }
 
-const CostChart: React.FC<CostChartProps> = ({ data, credentials }) => {
+const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting }) => {
   const [groupedServices, setGroupedServices] = useState<GroupedService[]>([]);
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,6 +129,7 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials }) => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: isExporting ? false : {},
     plugins: {
       legend: {
         display: false,
