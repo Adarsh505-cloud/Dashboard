@@ -41,7 +41,9 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
 
   const user = auth.user?.profile;
-  const isAdmin = (user?.['cognito:groups'] as string[])?.includes('Admins') ?? false;
+  // Force admin privileges locally, otherwise check Cognito groups
+  const isLocalDev = import.meta.env.DEV;
+  const isAdmin = isLocalDev || ((user?.['cognito:groups'] as string[])?.includes('Admins') ?? false);
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -60,7 +62,8 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
       }
     };
 
-    if (auth.isAuthenticated) {
+    const isLocalDev = import.meta.env.DEV;
+    if (auth.isAuthenticated || isLocalDev) {
         fetchAccounts();
     }
   }, [auth.isAuthenticated]);

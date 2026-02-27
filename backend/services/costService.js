@@ -9,35 +9,30 @@ import { EC2Client } from '@aws-sdk/client-ec2';
 
 export class CostService {
   constructor(accountId, roleArn) {
-    this.accountId = accountId;
-    this.roleArn = roleArn;
-    this.region = process.env.AWS_REGION || 'us-east-1';
-    this.athenaOutput = process.env.ATHENA_OUTPUT_S3; // required (e.g. s3://bucket/path/)
+    this.accountId = String(accountId).trim();
+    this.roleArn = String(roleArn).trim();
+    
+    this.region = process.env.ATHENA_REGION || 'us-east-1';
+    
+    const rawBucket = `s3://cost-analyzer-results-${this.accountId}-${this.region}/`;
+    this.athenaOutput = rawBucket.toLowerCase();
+
     this.athenaDatabase = process.env.ATHENA_DATABASE || 'aws_cost_analysis_db';
-    this.athenaWorkGroup = process.env.ATHENA_WORKGROUP || undefined;
+    this.athenaCurTable = process.env.ATHENA_CUR_TABLE || 'data';
+    this.athenaWorkGroup = process.env.ATHENA_WORKGROUP || 'primary';
 
-    // bulk chunking config
-    this.bulkChunkSize = Number(process.env.BULK_CHUNK_SIZE || 200); // safe default
+    this.bulkChunkSize = Number(process.env.BULK_CHUNK_SIZE || 200);
+    this.ATHENA_POLL_MS = Number(process.env.ATHENA_POLL_MS || 22000);
+    this.ATHENA_POLL_INTERVAL_MS = Number(process.env.ATHENA_POLL_INTERVAL_MS || 1500);
+    this.START_RETRY_MAX = Number(process.env.START_RETRY_MAX || 3);
 
-    if (!this.athenaOutput) {
-      console.warn('⚠️ ATHENA_OUTPUT_S3 not set. Athena StartQueryExecution will likely fail without an output location.');
-    }
-
-    // Map product codes (as seen in CUR) to friendly names used by the dashboard
     this.serviceNameMap = {
-      'AmazonEC2': 'EC2',
-      'AmazonVPC': 'VPC',
-      'AmazonRDS': 'RDS',
-      'AmazonS3': 'S3',
-      'AWSGlue': 'Glue',
-      'awskms': 'KMS',
-      'AWSSecretsManager': 'SecretsManager',
-      'AmazonRoute53': 'Route53',
-      'AmazonCloudWatch': 'CloudWatch',
-      'AmazonAthena': 'Athena',
-      'AmazonECR': 'ECR',
-      // add more as required
+      'AmazonEC2': 'EC2', 'AmazonVPC': 'VPC', 'AmazonRDS': 'RDS',
+      'AmazonS3': 'S3', 'AWSGlue': 'Glue', 'awskms': 'KMS',
+      'AWSSecretsManager': 'SecretsManager', 'AmazonRoute53': 'Route53',
+      'AmazonCloudWatch': 'CloudWatch', 'AmazonAthena': 'Athena', 'AmazonECR': 'ECR',
     };
+    console.log(`[costService] Initialized for account ${this.accountId}, Table: ${this.athenaCurTable}`);
   }
 
   // ---------- Credential & clients ----------
@@ -420,13 +415,6 @@ export class CostService {
     return resultsMap;
   }
 
-  // ---------- the rest of your existing methods remain unchanged ----------
-  // (getDailyCostData, getWeeklyCostData, getCostTrendData, getTotalMonthlyCost,
-  //  getServiceCosts, getRegionCosts, getUserCosts, getResourceCosts, getProjectCosts,
-  //  estimateResourcesCost, getResourcesForService, getTopSpendingResources, getResourceTypeForService)
-  // For brevity we'll keep them unchanged — they were present earlier in the file and
-  // still reference getCreationEventsForResources/getDeletionEventsForResources as before.
-
   // ---------- COST ANALYSIS FUNCTIONS (Athena-based) ----------
   async getDailyCostData() {
     try {
@@ -440,8 +428,8 @@ export class CostService {
         SELECT
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
           COALESCE(line_item_product_code, 'Unknown') AS service,
-          SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost_usd
-        FROM ${this.athenaDatabase}.cur_daily_v1
+          SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost_usd
+        FROM ${this.athenaDatabase}.data
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
         GROUP BY 1, 2
@@ -524,8 +512,8 @@ export class CostService {
       const sql = `
         SELECT
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
-          SUM(CAST(ROUND(COALESCE(amortized_cost, line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS cost_cents
-        FROM ${this.athenaDatabase}.cur_daily_v1
+          SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS cost_cents
+        FROM ${this.athenaDatabase}.data
         WHERE date(line_item_usage_start_date) >= DATE '${startStr}'
           AND date(line_item_usage_start_date) <= DATE '${endStr}'
         GROUP BY 1
@@ -549,8 +537,8 @@ export class CostService {
     try {
       const { Start, End } = this.getDateRange(1); // current month from 1st to today
       const sql = `
-        SELECT SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
-        FROM ${this.athenaDatabase}.cur_daily_v1
+        SELECT SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
+        FROM ${this.athenaDatabase}.data
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}';
       `;
@@ -569,8 +557,8 @@ export class CostService {
       const sql = `
         SELECT COALESCE(line_item_product_code, 'Unknown') AS service,
                product_location AS region,
-               SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
-        FROM ${this.athenaDatabase}.cur_daily_v1
+               SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
+        FROM ${this.athenaDatabase}.data
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}'
         GROUP BY COALESCE(line_item_product_code, 'Unknown'), product_location
@@ -598,8 +586,8 @@ export class CostService {
             WHEN lower(product_location) IN ('any','(any)','unknown') THEN 'Global'
             ELSE product_location
           END AS region,
-          SUM(COALESCE(amortized_cost, line_item_unblended_cost, 0)) AS total_cost
-        FROM ${this.athenaDatabase}.cur_daily_v1
+          SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost
+        FROM ${this.athenaDatabase}.data
         WHERE date(line_item_usage_start_date) >= DATE '${Start}'
           AND date(line_item_usage_start_date) <= DATE '${End}'
         GROUP BY 1
@@ -636,11 +624,11 @@ export class CostService {
           SELECT
             COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
             COALESCE(NULLIF(TRIM(resource_tags['user_owner']), '')) AS explicit_owner,
-            SUM(COALESCE(amortized_cost, line_item_unblended_cost, 0)) AS owner_cost,
+            SUM(COALESCE(line_item_unblended_cost, 0)) AS owner_cost,
             COUNT(*) AS owner_rows
-          FROM ${this.athenaDatabase}.cur_daily_v1
+          FROM ${this.athenaDatabase}.data
           WHERE date(line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
-            AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
+            AND (line_item_unblended_cost IS NOT NULL)
             AND COALESCE(NULLIF(TRIM(resource_tags['user_owner']), '')) IS NOT NULL
           GROUP BY
             COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id),
@@ -669,12 +657,12 @@ export class CostService {
             COALESCE(NULLIF(TRIM(t.resource_tags['user_owner']), '')) AS explicit_owner,
             l.inferred_owner,
             COALESCE(NULLIF(TRIM(t.resource_tags['user_owner']), ''), l.inferred_owner) AS resolved_owner,
-            COALESCE(t.amortized_cost, t.line_item_unblended_cost, 0) AS usd_cost
-          FROM ${this.athenaDatabase}.cur_daily_v1 t
+            COALESCE(t.line_item_unblended_cost, 0) AS usd_cost
+          FROM ${this.athenaDatabase}.data t
           LEFT JOIN owner_lookup l
             ON COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) = l.resource_id
           WHERE date(t.line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
-            AND (t.amortized_cost IS NOT NULL OR t.line_item_unblended_cost IS NOT NULL)
+            AND (t.line_item_unblended_cost IS NOT NULL)
         )
         SELECT
           resolved_owner AS user_owner,
@@ -723,9 +711,9 @@ export class CostService {
         SELECT
           COALESCE(line_item_product_code, 'Unknown') AS service,
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
-          SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS daily_cost,
+          SUM( COALESCE(line_item_unblended_cost, 0) ) AS daily_cost,
           COUNT(DISTINCT line_item_resource_id) AS resource_count
-        FROM ${this.athenaDatabase}.cur_daily_v1
+        FROM ${this.athenaDatabase}.data
         WHERE
           date(line_item_usage_start_date) >= DATE '${startStr}' AND
           date(line_item_usage_start_date) <= DATE '${endStr}' AND
@@ -792,12 +780,12 @@ export class CostService {
     SELECT
       COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
       NULLIF(TRIM(resource_tags['user_project']), '') AS user_project,
-      SUM(COALESCE(amortized_cost, line_item_unblended_cost, 0)) AS project_cost,
+      SUM(COALESCE(line_item_unblended_cost, 0)) AS project_cost,
       COUNT(*) AS project_rows
-    FROM ${this.athenaDatabase}.cur_daily_v1
+    FROM ${this.athenaDatabase}.data
     WHERE date(line_item_usage_start_date) >= DATE '${Start}'
       AND date(line_item_usage_start_date) <= DATE '${End}'
-      AND (amortized_cost IS NOT NULL OR line_item_unblended_cost IS NOT NULL)
+      AND (line_item_unblended_cost IS NOT NULL)
       AND NULLIF(TRIM(resource_tags['user_project']), '') IS NOT NULL
     GROUP BY
       COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id),
@@ -826,13 +814,13 @@ export class CostService {
       NULLIF(TRIM(t.resource_tags['user_project']), '') AS explicit_project,
       l.inferred_project,
       COALESCE(NULLIF(TRIM(t.resource_tags['user_project']), ''), l.inferred_project) AS resolved_project,
-      COALESCE(t.amortized_cost, t.line_item_unblended_cost, 0) AS usd_cost
-    FROM ${this.athenaDatabase}.cur_daily_v1 t
+      COALESCE(t.line_item_unblended_cost, 0) AS usd_cost
+    FROM ${this.athenaDatabase}.data t
     LEFT JOIN project_lookup l
       ON COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) = l.resource_id
     WHERE date(t.line_item_usage_start_date) >= DATE '${Start}'
       AND date(t.line_item_usage_start_date) <= DATE '${End}'
-      AND (t.amortized_cost IS NOT NULL OR t.line_item_unblended_cost IS NOT NULL)
+      AND (t.line_item_unblended_cost IS NOT NULL)
   )
   
   SELECT
@@ -912,8 +900,8 @@ export class CostService {
               identity_line_item_id
             ) AS resource_id,
             COALESCE(NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS raw_resource_id,
-            SUM( COALESCE(amortized_cost, line_item_unblended_cost, 0) ) AS total_cost
-        FROM "${this.athenaDatabase}".cur_daily_v1
+            SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
+        FROM "${this.athenaDatabase}".data
         WHERE date(line_item_usage_start_date) >= (current_date - interval '30' day)
           AND (line_item_resource_id IS NOT NULL OR identity_line_item_id IS NOT NULL)
           AND trim(COALESCE(line_item_resource_id, identity_line_item_id, '')) <> ''
@@ -965,4 +953,3 @@ export class CostService {
     return serviceToResourceType[serviceName] || null;
   }
 }
-
