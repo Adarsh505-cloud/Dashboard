@@ -18,12 +18,16 @@ function App() {
     setCurrentPage('dashboard');
   };
 
+  
   const handleBackToInputs = () => {
     setCurrentPage('inputs');
     setAwsCredentials(null);
   };
 
-  if (auth.isLoading) {
+  // --- ADDED: Bypass flag for local development ---
+  const isLocalDev = import.meta.env.DEV;
+
+  if (auth.isLoading && !isLocalDev) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-gray-700">
         <Loader className="w-12 h-12 animate-spin mb-4" />
@@ -32,7 +36,7 @@ function App() {
     );
   }
 
-  if (auth.error) {
+  if (auth.error && !isLocalDev) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-red-700">
         <AlertCircle className="w-12 h-12 mb-4" />
@@ -42,7 +46,7 @@ function App() {
     );
   }
 
-  if (auth.isAuthenticated) {
+  if (auth.isAuthenticated || isLocalDev) {
     if (currentPage === 'inputs') {
       return <InputsPage onGetDetails={handleGetDetails} auth={auth} />;
     }
@@ -51,6 +55,7 @@ function App() {
     }
   }
 
+  // This fallback return (the login screen) must ALWAYS be at the very bottom
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">

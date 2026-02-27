@@ -9,12 +9,20 @@ import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 
 export class RecommendationService {
   constructor(accountId, roleArn) {
-    this.accountId = accountId;
-    this.roleArn = roleArn;
-    this.region = process.env.AWS_REGION || "us-east-1";
-    this.athenaDatabase = "aws_cost_analysis_db";
-    this.athenaTable = "cur_recomdations_v1";
-    this.athenaOutputLocation = `s3://athena-query-results-eutest/`; // FIXME: Add your S3 bucket for Athena results
+    // Sanitize incoming parameters
+    this.accountId = String(accountId).trim();
+    this.roleArn = String(roleArn).trim();
+
+    // Fixed region
+    this.region = "us-east-1";
+
+    // Dynamic bucket, DB, table, workgroup (strictly formatted)
+    const rawBucket = `s3://cost-analyzer-results-${this.accountId}-${this.region}/`;
+    this.athenaOutputLocation = rawBucket.toLowerCase();
+
+    this.athenaDatabase = process.env.ATHENA_DATABASE || "aws_cost_analysis_db";
+    this.athenaTable = process.env.ATHENA_RECOMMENDATIONS_TABLE || "cur_recomdations_v1";
+    this.athenaWorkGroup = process.env.ATHENA_WORKGROUP || "primary";
   }
 
   async getCredentials() {
@@ -24,7 +32,7 @@ export class RecommendationService {
         RoleSessionName: `recommendations-${Date.now()}`,
         DurationSeconds: 3600,
       },
-    });
+    })(); // <-- IMPORTANT: Added () to invoke the provider
   }
 
   async getAthenaClient() {
@@ -38,15 +46,35 @@ export class RecommendationService {
   async getRecommendations() {
     try {
       console.log("🔍 Fetching recommendations from Athena...");
+      console.log(
+        `📊 Using WorkGroup: ${this.athenaWorkGroup}, Database: ${this.athenaDatabase}, Region: ${this.region}`
+      );
+      console.log(`✅ Evaluated Athena Output Location: ${this.athenaOutputLocation}`);
+
       const athenaClient = await this.getAthenaClient();
 
-      const query = `SELECT * FROM "${this.athenaDatabase}"."${this.athenaTable}"`;
+      // One row per recommendation_id: keep latest refresh only
+      const query = `
+        SELECT *
+        FROM (
+          SELECT
+            *,
+            ROW_NUMBER() OVER (
+              PARTITION BY recommendation_id
+              ORDER BY last_refresh_timestamp DESC
+            ) AS rn
+          FROM "${this.athenaDatabase}"."${this.athenaTable}"
+        )
+        WHERE rn = 1
+      `;
 
       const startQueryExecutionCommand = new StartQueryExecutionCommand({
         QueryString: query,
         QueryExecutionContext: {
           Database: this.athenaDatabase,
         },
+        WorkGroup: this.athenaWorkGroup,
+        // <-- IMPORTANT: Added ResultConfiguration so Athena knows where to write
         ResultConfiguration: {
           OutputLocation: this.athenaOutputLocation,
         },
@@ -70,7 +98,6 @@ export class RecommendationService {
             `Athena query failed: ${QueryExecution?.Status?.StateChangeReason}`
           );
         }
-        // small delay before polling again
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
@@ -90,7 +117,9 @@ export class RecommendationService {
     } catch (error) {
       console.error("❌ Error fetching recommendations from Athena:", error);
       throw new Error(
-        `Failed to fetch recommendations from Athena: ${error.message || error}`
+        `Failed to fetch recommendations from Athena: ${
+          error.message || error
+        }`
       );
     }
   }
@@ -98,25 +127,23 @@ export class RecommendationService {
   // Parse Athena ResultSet (rows + metadata) into JS objects
   parseAthenaResults(resultSet) {
     const columnInfo = resultSet.ResultSetMetadata?.ColumnInfo || [];
-    // Rows include a header row at index 0; skip it
-    const rows = (resultSet.Rows || []).slice(1);
+    const rows = (resultSet.Rows || []).slice(1); // skip header
 
     return rows.map((row) => {
       const recommendation = {};
       (row.Data || []).forEach((datum, index) => {
         const columnName = columnInfo[index]?.Name;
-        // datum.VarCharValue may be undefined for NULL results
-        recommendation[columnName] = datum && typeof datum.VarCharValue !== "undefined"
-          ? datum.VarCharValue
-          : null;
+        recommendation[columnName] =
+          datum && typeof datum.VarCharValue !== "undefined"
+            ? datum.VarCharValue
+            : null;
       });
       return this.mapToRecommendationFormat(recommendation);
     });
   }
 
-  // Map Athena row to the shape expected by your React component
+  // Map Athena row (new schema) to UI-friendly shape
   mapToRecommendationFormat(athenaRecord = {}) {
-    // helper to safely parse numbers (Athena returns strings often)
     const safeParseFloat = (value) => {
       if (value == null) return 0;
       if (typeof value === "number") return value;
@@ -126,59 +153,78 @@ export class RecommendationService {
       return Number.isFinite(n) ? n : 0;
     };
 
-    // Use BEFORE discount savings first (your Athena data has values there),
-    // otherwise fall back to after_discount.
-    const savingsBefore = safeParseFloat(
-      athenaRecord.estimated_monthly_savings_before_discount
-    );
-    const savingsAfter = safeParseFloat(
-      athenaRecord.estimated_monthly_savings_after_discount
-    );
-    const potentialSavings = savingsBefore > 0 ? savingsBefore : savingsAfter;
+    // Safely check for 'after_discount' first. 
+    // If it's null/blank, fallback to the standard 'estimated_monthly_savings'
+    const rawSavings = 
+      athenaRecord.estimated_monthly_savings_after_discount || 
+      athenaRecord.estimated_monthly_savings || 
+      athenaRecord.estimated_monthly_savings_before_discount; 
 
-    // cost (prefer before discount if present)
-    const costBefore = safeParseFloat(
-      athenaRecord.estimated_monthly_cost_before_discount
-    );
-    const costAfter = safeParseFloat(
-      athenaRecord.estimated_monthly_cost_after_discount
-    );
-    const estimatedCost = costBefore > 0 ? costBefore : costAfter;
+    const potentialSavings = safeParseFloat(rawSavings);
 
-    // build a friendly resource/title string
+    // IMPORTANT: reuse existing UI field, map it to savings
+    const estimatedCost = potentialSavings;
+
+    // Build resource string from available fields
     const resourceParts = [];
-    if (athenaRecord.recommended_resource_summary) resourceParts.push(athenaRecord.recommended_resource_summary);
-    if (athenaRecord.current_resource_summary && athenaRecord.current_resource_summary !== athenaRecord.recommended_resource_summary) resourceParts.push(athenaRecord.current_resource_summary);
-    if (athenaRecord.current_resource_type) resourceParts.push(`(${athenaRecord.current_resource_type})`);
-    const resource = resourceParts.length > 0 ? resourceParts.join(" · ") : (athenaRecord.resource_arn || athenaRecord.recommendation_id || "Recommendation");
+    if (athenaRecord.current_resource_type)
+      resourceParts.push(athenaRecord.current_resource_type);
+    if (
+      athenaRecord.recommended_resource_type &&
+      athenaRecord.recommended_resource_type !==
+        athenaRecord.current_resource_type
+    ) {
+      resourceParts.push(athenaRecord.recommended_resource_type);
+    }
+    if (athenaRecord.resource_arn) resourceParts.push(athenaRecord.resource_arn);
+    if (athenaRecord.account_name)
+      resourceParts.push(`(${athenaRecord.account_name})`);
 
-    // last activity: use last_refresh_timestamp or date if available; keep raw string for client formatting
+    const resource =
+      resourceParts.length > 0
+        ? resourceParts.join(" · ")
+        : athenaRecord.recommendation_id || "Recommendation";
+
     const lastActivityRaw = athenaRecord.last_refresh_timestamp || athenaRecord.date || null;
 
+    // Dynamically assign severity based on implementation_effort
+    let severity = "low";
+    if (athenaRecord.implementation_effort) {
+      severity = this.getSeverity(athenaRecord.implementation_effort);
+    }
+
+    const descriptionParts = [];
+    if (athenaRecord.recommendation_source)
+      descriptionParts.push(athenaRecord.recommendation_source);
+    if (athenaRecord.region) descriptionParts.push(athenaRecord.region);
+    const description =
+      descriptionParts.length > 0 ? descriptionParts.join(" · ") : null;
+
     return {
-      id: athenaRecord.recommendation_id || athenaRecord.recommendationId || null,
-      type: athenaRecord.action_type || athenaRecord.actionType || null,
-      severity: this.getSeverity(athenaRecord.implementation_effort),
+      id: athenaRecord.recommendation_id || null,
+      type: athenaRecord.action_type || null,
+      severity,
       resource,
-      description: athenaRecord.recommended_resource_details || athenaRecord.recommended_resource_summary || athenaRecord.current_resource_details || null,
-      potentialSavings: potentialSavings, // numeric
-      estimatedCost: estimatedCost, // numeric cost context
-      lastActivity: lastActivityRaw, // string (client will format)
-      action: athenaRecord.action_type || athenaRecord.action || null,
-      // keep raw record for debugging if needed
+      description,
+      // UI reads this and now it contains the savings value
+      estimatedCost,
+      // keep explicit savings field for future use
+      potentialSavings,
+      lastActivity: lastActivityRaw,
+      action: athenaRecord.action_type || null,
       __raw: athenaRecord,
     };
   }
 
   getSeverity(implementationEffort) {
-    switch (implementationEffort) {
-      case "VeryLow":
-      case "Low":
+    switch (String(implementationEffort).toLowerCase()) {
+      case "verylow":
+      case "low":
         return "low";
-      case "Medium":
+      case "medium":
         return "medium";
-      case "High":
-      case "VeryHigh":
+      case "high":
+      case "veryhigh":
         return "high";
       default:
         return "low";

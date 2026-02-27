@@ -8,6 +8,17 @@ const verifier = CognitoJwtVerifier.create({
 });
 
 export const authenticateUser = async (req, res, next) => {
+  // --- ADDED: Bypass auth for local development ---
+  if (process.env.NODE_ENV !== 'production') {
+    req.user = { 
+      id: 'local-dev-id',
+      email: 'local-dev@example.com',
+      groups: ['Admins'] // Ensure the fake user has the Admins group
+    };
+    return next();
+  }
+  // ----------------------------------------------
+
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
