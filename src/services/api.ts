@@ -23,6 +23,8 @@ export interface ResourceDetail {
 export interface ApiCredentials {
   accountId: string;
   roleArn: string;
+  accountType?: 'standalone' | 'master';
+  targetAccountId?: string;
 }
 
 export interface ApiResponse<T> {
@@ -35,10 +37,11 @@ export interface ApiResponse<T> {
 }
 
 export interface OnboardedAccount {
-    id: string;
-    accountId: string;
-    roleArn: string;
-    name: string;
+  id?: string;
+  accountId: string;
+  roleArn: string;
+  name: string;
+  accountType?: 'standalone' | 'master'; // ADD THIS LINE
 }
 
 

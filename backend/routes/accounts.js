@@ -12,19 +12,15 @@ const docClient = DynamoDBDocumentClient.from(client);
 // GET /api/accounts - Fetch accounts based on user role
 router.get('/', authenticateUser, async (req, res, next) => {
   try {
-    // Admins get all accounts from the OnboardedAccounts table
     if (req.user.groups.includes('Admins')) {
       const command = new ScanCommand({ TableName: "OnboardedAccounts" });
       const { Items } = await docClient.send(command);
       return res.json({ success: true, data: Items || [] });
-    }
-    // Viewers get only their assigned accounts
-    else {
-      // 1. Get the account IDs assigned to this user from UserAccountMappings
+    } else {
       const mappingCommand = new QueryCommand({
         TableName: "UserAccountMappings",
         KeyConditionExpression: "userId = :userId",
-        ExpressionAttributeValues: { ":userId": req.user.id }, // req.user.id is the UUID (sub) from the token
+        ExpressionAttributeValues: { ":userId": req.user.id },
       });
       const { Items: mappings } = await docClient.send(mappingCommand);
 
@@ -32,7 +28,6 @@ router.get('/', authenticateUser, async (req, res, next) => {
         return res.json({ success: true, data: [] });
       }
 
-      // 2. Use BatchGetCommand for an efficient lookup of the assigned accounts
       const keys = mappings.map(m => ({ accountId: m.accountId }));
       const batchGetCommand = new BatchGetCommand({
         RequestItems: {
@@ -50,7 +45,8 @@ router.get('/', authenticateUser, async (req, res, next) => {
 
 // POST /api/accounts - Add a new account (Admins only)
 router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
-  const { accountId, roleArn, name } = req.body;
+  // FIXED: Added accountType extraction
+  const { accountId, roleArn, name, accountType } = req.body;
   if (!accountId || !roleArn || !name) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -58,10 +54,11 @@ router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
   try {
     const command = new PutCommand({
       TableName: "OnboardedAccounts",
-      Item: { accountId, roleArn, name },
+      // FIXED: Save accountType to DynamoDB (defaulting to standalone if missing)
+      Item: { accountId, roleArn, name, accountType: accountType || 'standalone' },
     });
     await docClient.send(command);
-    res.status(201).json({ success: true, data: { accountId, roleArn, name } });
+    res.status(201).json({ success: true, data: { accountId, roleArn, name, accountType: accountType || 'standalone' } });
   } catch (error) { next(error); }
 });
 

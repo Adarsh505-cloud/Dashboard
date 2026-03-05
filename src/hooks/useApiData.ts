@@ -53,7 +53,7 @@ interface ApiData {
   totalMonthlyCost: number;
   serviceCosts: Array<{ service: string; cost: number; region: string }>;
   regionCosts: Array<{ region: string; cost: number }>;
-  userCosts: Array<{ user: string; cost: number; resources: number; resourcesList: string[] | null | string; }>; // Added resourcesList
+  userCosts: Array<{ user: string; cost: number; resources: number; resourcesList: string[] | null | string; }>;
   resourceCosts: Array<{ type: string; cost: number; trend: number[]; count: number }>;
   projectCosts: Array<{ project: string; cost: number; resources: number; owner: string }>;
   recommendations: Array<{
@@ -69,10 +69,11 @@ interface ApiData {
   costTrendData?: CostTrendData[];
   dailyCostData?: DailyCostData[];
   weeklyCostData?: WeeklyCostData[];
-  topSpendingResources?: TopSpendingResource[]; // Added topSpendingResources
-  top_spending_resources?: TopSpendingResource[]; // Added snake_case version
+  topSpendingResources?: TopSpendingResource[];
+  top_spending_resources?: TopSpendingResource[];
   topResources?: TopSpendingResource[];
   top_resources?: TopSpendingResource[];
+  linkedAccountsSummary?: Array<{ accountId: string; cost: number }>; // ADDED THIS LINE
 }
 
 interface UseApiDataResult {
