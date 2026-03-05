@@ -156,6 +156,11 @@ class ApiService {
   async checkHealth(): Promise<{ status: string; timestamp: string; environment: string }> {
     return this.makeRequest(`${API_GATEWAY_URL}/health`, undefined, 'GET');
   }
+
+  // --- CHATBOT METHOD ---
+  async sendChatMessage(payload: { accountId: string; prompt: string; sessionId: string }): Promise<{ reply: string }> {
+    return this.makeRequest(`${API_GATEWAY_URL}/api/chat`, payload, 'POST');
+  }
 }
 
 export const apiService = new ApiService();

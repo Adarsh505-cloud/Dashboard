@@ -7,6 +7,7 @@ import serverless from 'serverless-http';
 import costRoutes from './routes/cost.js';
 import accountRoutes from './routes/accounts.js'; 
 import userRoutes from './routes/users.js';
+import chatRoutes from './routes/chat.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => res.json({ status: 'OK' }));
 app.use('/api/cost', costRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.use(errorHandler);
 app.use('*', (req, res) => res.status(404).json({ error: 'Route not found' }));

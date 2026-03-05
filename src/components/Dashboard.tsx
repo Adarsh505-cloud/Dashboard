@@ -25,6 +25,7 @@ import RecommendationsPanel from './RecommendationsPanel';
 import OverviewDashboard from './OverviewDashboard';
 import { exportToPDF } from '../utils/pdfExport';
 import { useApiData } from '../hooks/useApiData';
+import ChatbotWidget from './ChatbotWidget';
 
 interface DashboardProps {
   credentials: {
@@ -407,6 +408,9 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
           {activeTab === 'recommendations' && <RecommendationsPanel data={data.recommendations} />}
         </div>
       </div>
+
+      {/* Put the ChatbotWidget right here, before the final closing div */}
+      <ChatbotWidget accountId={credentials.accountId} />
     </div>
   );
 };
