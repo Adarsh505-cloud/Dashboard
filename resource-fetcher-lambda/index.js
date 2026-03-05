@@ -2,7 +2,8 @@ import { CostService } from './costService.js';
 
 export const handler = async (event) => {
   try {
-    const { accountId, roleArn, serviceName } = event;
+    // FIXED: Added targetAccountId to support Master Payer drill-down
+    const { accountId, roleArn, serviceName, targetAccountId } = event;
 
     if (!accountId || !roleArn || !serviceName) {
       throw new Error('Missing required parameters: accountId, roleArn, or serviceName');
@@ -11,7 +12,9 @@ export const handler = async (event) => {
     console.log(`Fetching resources for service: ${serviceName}`);
 
     const costService = new CostService(accountId, roleArn);
-    const resources = await costService.getResourcesForService(serviceName);
+    
+    // FIXED: Passed targetAccountId to the service
+    const resources = await costService.getResourcesForService(serviceName, targetAccountId);
 
     console.log(`Successfully fetched ${resources.length} resources.`);
 

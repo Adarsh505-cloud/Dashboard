@@ -4,13 +4,14 @@ import { X, Download, Shield, Info, Copy, Check } from 'lucide-react';
 
 interface ConnectAccountModalProps {
   onClose: () => void;
-  onConnect: (accountId: string, roleArn: string, accountName: string) => void;
+  onConnect: (accountId: string, roleArn: string, accountName: string, accountType: 'standalone' | 'master') => void;
 }
 
 const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onConnect }) => {
   const [newAccountId, setNewAccountId] = useState('');
   const [newRoleArn, setNewRoleArn] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [accountType, setAccountType] = useState<'standalone' | 'master'>('standalone');
   const [copied, setCopied] = useState(false);
 
   const webAppAccountId = "183631321229"; // Your backend's AWS Account ID
@@ -23,7 +24,7 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onConnect(newAccountId, newRoleArn, accountName);
+    onConnect(newAccountId, newRoleArn, accountName, accountType);
   };
 
   return (
@@ -40,13 +41,12 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
-          {/* Instructions */}
           <div className="space-y-6">
             <div className="flex gap-4">
               <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 font-bold rounded-full">1</div>
               <div>
                 <h3 className="font-semibold text-lg text-gray-800">Download the Template</h3>
-                <p className="text-gray-600">Download our CloudFormation template. This template creates a secure, read-only IAM role that allows our dashboard to analyze your cost data.</p>
+                <p className="text-gray-600">Download our CloudFormation template. This creates a secure, read-only IAM role that allows our dashboard to analyze your cost data.</p>
                 <a
                   href="/cost-analysis-role.yaml"
                   download
@@ -63,11 +63,9 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
               <div>
                 <h3 className="font-semibold text-lg text-gray-800">Deploy in Your AWS Account</h3>
                 <p className="text-gray-600">
-                  Go to the <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create/template" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">AWS CloudFormation console</a>, upload the template, and create the stack. You will be asked for one parameter:
+                  Go to the <a href="https://console.aws.amazon.com/cloudformation/home#/stacks/create/template" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">AWS CloudFormation console</a>, upload the template, and create the stack. You will be asked for our WebAppAwsAccountId:
                 </p>
                 <div className="mt-3 bg-gray-50 p-4 rounded-lg border">
-                  <p className="text-sm font-medium text-gray-700">WebAppAwsAccountId</p>
-                  <p className="text-xs text-gray-500 mb-2">This is our application's AWS account ID, which needs permission to assume the role.</p>
                   <div className="flex items-center gap-2 bg-white p-2 rounded-md border">
                     <code className="text-sm text-gray-800">{webAppAccountId}</code>
                     <button onClick={handleCopy} className="ml-auto p-1.5 rounded text-gray-500 hover:bg-gray-100">
@@ -81,25 +79,42 @@ const ConnectAccountModal: React.FC<ConnectAccountModalProps> = ({ onClose, onCo
             <div className="flex gap-4">
               <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 font-bold rounded-full">3</div>
               <div>
-                <h3 className="font-semibold text-lg text-gray-800">Enter Role ARN</h3>
-                <p className="text-gray-600">Once the stack is created, go to the "Outputs" tab, copy the `RoleArn`, and paste it below along with your account ID.</p>
+                <h3 className="font-semibold text-lg text-gray-800">Enter Role ARN & Account Details</h3>
+                <p className="text-gray-600">Once created, go to "Outputs", copy the `RoleArn`, and paste it below.</p>
               </div>
             </div>
           </div>
 
-          {/* Permissions Info */}
-          <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-blue-800">Read-Only Permissions</p>
-                <p className="text-sm text-blue-700">The IAM role only grants read-only permissions for cost analysis services like Cost Explorer, CloudWatch, and Resource Groups. It cannot make any changes to your resources.</p>
+          <form onSubmit={handleSubmit} className="space-y-5 pt-4 border-t">
+            {/* NEW: Account Type Selection */}
+            <div className="p-4 border rounded-lg bg-gray-50">
+              <label className="block text-sm font-semibold text-gray-800 mb-3">Account Type</label>
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="accountType" 
+                    value="standalone"
+                    checked={accountType === 'standalone'} 
+                    onChange={() => setAccountType('standalone')} 
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500" 
+                  />
+                  <span className="text-sm font-medium text-gray-800">Standalone Account</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="accountType" 
+                    value="master"
+                    checked={accountType === 'master'} 
+                    onChange={() => setAccountType('master')} 
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500" 
+                  />
+                  <span className="text-sm font-medium text-gray-800">Master Payer Account</span>
+                </label>
               </div>
             </div>
-          </div>
 
-          {/* Input Form */}
-          <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
               <input

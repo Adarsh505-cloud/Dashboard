@@ -8,10 +8,10 @@ import {
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 
 export class RecommendationService {
-  constructor(accountId, roleArn) {
-    // Sanitize incoming parameters
+  constructor(accountId, roleArn, targetAccountId = null) {
     this.accountId = String(accountId).trim();
     this.roleArn = String(roleArn).trim();
+    this.targetAccountId = targetAccountId ? String(targetAccountId).trim() : null;
 
     // Fixed region
     this.region = "us-east-1";
@@ -64,6 +64,7 @@ export class RecommendationService {
               ORDER BY last_refresh_timestamp DESC
             ) AS rn
           FROM "${this.athenaDatabase}"."${this.athenaTable}"
+          ${this.targetAccountId ? `WHERE account_id = '${this.targetAccountId}'` : ''} 
         )
         WHERE rn = 1
       `;

@@ -23,6 +23,7 @@ import ResourceChart from './ResourceChart';
 import ProjectChart from './ProjectChart';
 import RecommendationsPanel from './RecommendationsPanel';
 import OverviewDashboard from './OverviewDashboard';
+import MasterOverviewDashboard from './MasterOverviewDashboard';
 import { exportToPDF } from '../utils/pdfExport';
 import { useApiData } from '../hooks/useApiData';
 import ChatbotWidget from './ChatbotWidget';
@@ -31,6 +32,7 @@ interface DashboardProps {
   credentials: {
     accountId: string;
     roleArn: string;
+    accountType?: 'standalone' | 'master';
   };
   onBack: () => void;
 }
@@ -38,14 +40,22 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isExporting, setIsExporting] = useState(false);
+  const [targetAccountId, setTargetAccountId] = useState<string | undefined>(undefined);
+  
   const dashboardRef = useRef<HTMLDivElement>(null);
-  const { data, loading, error, retry } = useApiData(credentials);
+
+  // Combine parent credentials with local drill-down target
+  const activeCredentials = {
+    ...credentials,
+    targetAccountId
+  };
+
+  const { data, loading, error, retry } = useApiData(activeCredentials);
 
   const handleExportPDF = async () => {
     if (!dashboardRef.current || !data) return;
     
     setIsExporting(true);
-    // Use a short timeout to allow the UI to re-render with animations disabled
     setTimeout(async () => {
         if (dashboardRef.current) {
             try {
@@ -73,6 +83,17 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     });
   };
 
+  const handleBack = () => {
+    // If drilling down into a master account, go back to the master view
+    if (credentials.accountType === 'master' && targetAccountId) {
+      setTargetAccountId(undefined);
+      setActiveTab('overview');
+    } else {
+      // Otherwise, go completely back to inputs
+      onBack();
+    }
+  };
+
   const tabs = [
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'services', label: 'Services', icon: Activity },
@@ -81,15 +102,6 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     { key: 'projects', label: 'Projects', icon: FolderOpen },
     { key: 'recommendations', label: 'Recommendations', icon: AlertTriangle },
   ];
-
-  // Debugging: inspect incoming data shape (remove in prod)
-  // Use Vite's import.meta.env.DEV instead of process.env.NODE_ENV
-  if (import.meta.env.DEV && data) {
-    console.log('Dashboard: incoming data shape:', {
-      keys: Object.keys(data || {}),
-      topSpendingResources: data?.topSpendingResources || data?.top_spending_resources || data?.topResources || data?.top_resources
-    });
-  }
 
   // Helper: normalize and map top spending resources to expected shape
   const mapTopSpendingResources = (rawAny: any): any[] | undefined => {
@@ -127,12 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     });
   };
 
-  const mappedTop =
-    mapTopSpendingResources(data?.topSpendingResources) ||
-    mapTopSpendingResources(data?.top_spending_resources) ||
-    mapTopSpendingResources(data?.topResources) ||
-    mapTopSpendingResources(data?.top_resources) ||
-    undefined;
+  const isMasterView = credentials.accountType === 'master' && !targetAccountId;
 
   if (loading) {
     return (
@@ -140,15 +147,20 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
             <button
-              onClick={onBack}
+              onClick={handleBack}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Cost Dashboard</h1>
-              <p className="text-gray-600">Account: {credentials.accountId}</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
+              </h1>
+              <p className="text-gray-600">
+                Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
+                {isMasterView && ' (Master Payer)'}
+              </p>
             </div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
@@ -171,27 +183,32 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     );
   }
 
-  if (error) {
-    const isCredentialsError = error.includes('Invalid AWS credentials') || 
-                              error.includes('InvalidClientTokenId') ||
-                              error.includes('security token');
+  if (error || !data) {
+    const errorText = error || 'No data could be retrieved.';
+    const isCredentialsError = errorText.includes('Invalid AWS credentials') || 
+                              errorText.includes('InvalidClientTokenId') ||
+                              errorText.includes('security token');
     
-    const isConnectionError = error.includes('Backend server not available') ||
-                             error.includes('connection refused');
+    const isConnectionError = errorText.includes('Backend server not available') ||
+                             errorText.includes('connection refused');
     return (
       <div className="min-h-screen p-4 lg:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
             <button
-              onClick={onBack}
+              onClick={handleBack}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Cost Dashboard</h1>
-              <p className="text-gray-600">Account: {credentials.accountId}</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
+              </h1>
+              <p className="text-gray-600">
+                Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
+              </p>
             </div>
           </div>
           <div className={`border rounded-xl p-8 text-center ${
@@ -206,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
               <h2 className={`text-2xl font-bold ${
                 isCredentialsError ? 'text-amber-800' : 'text-red-800'
               }`}>
-                {isCredentialsError ? 'Invalid AWS Credentials' : 'Connection Failed'}
+                {isCredentialsError ? 'Invalid AWS Credentials' : 'Error Retrieving Data'}
               </h2>
             </div>
             
@@ -217,40 +234,16 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                 ? 'The provided AWS credentials are invalid or expired. Please check your Account ID and IAM Role ARN.'
                 : isConnectionError
                 ? 'Unable to connect to the backend server. Please ensure the backend is running.'
-                : error
+                : errorText
               }
             </p>
-            <div className={`rounded-lg p-4 mb-6 text-sm ${
-              isCredentialsError ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {isCredentialsError ? (
-                <div className="text-left">
-                  <p className="font-medium mb-2">Common issues:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Account ID must be exactly 12 digits</li>
-                    <li>IAM Role ARN format: arn:aws:iam::ACCOUNT:role/ROLE_NAME</li>
-                    <li>Role must have Cost Explorer and billing permissions</li>
-                    <li>Role must allow the assume role action</li>
-                  </ul>
-                </div>
-              ) : (
-                <div className="text-left">
-                  <p className="font-medium mb-2">Troubleshooting:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Ensure the backend server is running on port 3001</li>
-                    <li>Check network connectivity</li>
-                    <li>Verify CORS settings</li>
-                  </ul>
-                </div>
-              )}
-            </div>
             <div className="flex items-center justify-center gap-4">
               <button
-                onClick={onBack}
+                onClick={handleBack}
                 className="flex items-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
-                Back to Inputs
+                Back
               </button>
               <button
                 onClick={retry}
@@ -270,40 +263,12 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="min-h-screen p-4 lg:p-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Cost Dashboard</h1>
-              <p className="text-gray-600">Account: {credentials.accountId}</p>
-            </div>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">No Data Available</h2>
-            <p className="text-gray-600 mb-6">
-              No cost data could be retrieved from your AWS account.
-            </p>
-            <button
-              onClick={retry}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
-            >
-              <RefreshCw className="w-5 h-5" />
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const mappedTop =
+    mapTopSpendingResources(data?.topSpendingResources) ||
+    mapTopSpendingResources(data?.top_spending_resources) ||
+    mapTopSpendingResources(data?.topResources) ||
+    mapTopSpendingResources(data?.top_resources) ||
+    undefined;
 
   return (
     <div className="min-h-screen p-4 lg:p-8">
@@ -312,15 +277,20 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={onBack}
+              onClick={handleBack}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Cost Dashboard</h1>
-              <p className="text-gray-600">Account: {credentials.accountId}</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
+              </h1>
+              <p className="text-gray-600">
+                Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
+                {isMasterView && ' (Master Payer)'}
+              </p>
             </div>
           </div>
           
@@ -349,67 +319,82 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </button>
           </div>
         </div>
-        {/* Total Cost Card */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 mb-8 text-white shadow-2xl">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-white/20 rounded-2xl">
-              <DollarSign className="w-8 h-8" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">Total Monthly Cost</h2>
-              <p className="text-blue-100">Current billing period</p>
-            </div>
-          </div>
-          <div className="text-5xl font-bold mb-2">
-            ${data.totalMonthlyCost?.toLocaleString?.() ?? 0}
-          </div>
-          <div className="flex items-center gap-2 text-blue-100">
-            <TrendingUp className="w-5 h-5" />
-            <span>Real-time data from AWS CUR Data</span>
-          </div>
-        </div>
-        {/* Navigation Tabs */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8 overflow-hidden">
-          <div className="flex overflow-x-auto">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-3 px-6 py-4 whitespace-nowrap transition-all duration-200 border-b-2 ${
-                    activeTab === tab.key
-                      ? 'border-blue-500 text-blue-600 bg-blue-50'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Dashboard Content */}
-        <div ref={dashboardRef} className="space-y-8">
-          {activeTab === 'overview' && <OverviewDashboard data={data} isExporting={isExporting} />}
-          {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={credentials} isExporting={isExporting} />}
-          {activeTab === 'users' && <UserCostChart data={data.userCosts} isExporting={isExporting} />}
-          {activeTab === 'resources' && (
-            <ResourceChart 
-              data={data.resourceCosts} 
-              dailyCostData={data.dailyCostData}
-              weeklyCostData={data.weeklyCostData}
-              topSpendingResources={mappedTop}
-              isExporting={isExporting}
+
+        {isMasterView ? (
+          /* Render Master Payer specific dashboard */
+          <div ref={dashboardRef}>
+            <MasterOverviewDashboard 
+              data={data} 
+              onDrillDown={(accId) => setTargetAccountId(accId)} 
             />
-          )}
-          {activeTab === 'projects' && <ProjectChart data={data.projectCosts} isExporting={isExporting} />}
-          {activeTab === 'recommendations' && <RecommendationsPanel data={data.recommendations} />}
-        </div>
+          </div>
+        ) : (
+          /* Render the standard Standalone / Drill-Down Dashboard */
+          <>
+            {/* Total Cost Card */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 mb-8 text-white shadow-2xl">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-white/20 rounded-2xl">
+                  <DollarSign className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Total Monthly Cost</h2>
+                  <p className="text-blue-100">Current billing period</p>
+                </div>
+              </div>
+              <div className="text-5xl font-bold mb-2">
+                ${data.totalMonthlyCost?.toLocaleString?.() ?? 0}
+              </div>
+              <div className="flex items-center gap-2 text-blue-100">
+                <TrendingUp className="w-5 h-5" />
+                <span>Real-time data from AWS CUR Data</span>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8 overflow-hidden">
+              <div className="flex overflow-x-auto">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`flex items-center gap-3 px-6 py-4 whitespace-nowrap transition-all duration-200 border-b-2 ${
+                        activeTab === tab.key
+                          ? 'border-blue-500 text-blue-600 bg-blue-50'
+                          : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="font-medium">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Dashboard Content */}
+            <div ref={dashboardRef} className="space-y-8">
+              {activeTab === 'overview' && <OverviewDashboard data={data} isExporting={isExporting} />}
+              {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={credentials} isExporting={isExporting} />}
+              {activeTab === 'users' && <UserCostChart data={data.userCosts} isExporting={isExporting} />}
+              {activeTab === 'resources' && (
+                <ResourceChart 
+                  data={data.resourceCosts} 
+                  dailyCostData={data.dailyCostData}
+                  weeklyCostData={data.weeklyCostData}
+                  topSpendingResources={mappedTop}
+                  isExporting={isExporting}
+                />
+              )}
+              {activeTab === 'projects' && <ProjectChart data={data.projectCosts} isExporting={isExporting} />}
+              {activeTab === 'recommendations' && <RecommendationsPanel data={data.recommendations} />}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Put the ChatbotWidget right here, before the final closing div */}
       <ChatbotWidget accountId={credentials.accountId} />
     </div>
   );

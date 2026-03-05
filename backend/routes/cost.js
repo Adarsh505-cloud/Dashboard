@@ -9,9 +9,11 @@ const lambdaClient = new LambdaClient({});
 
 router.post('/analysis', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn } = req.body;
-    const costService = new CostService(accountId, roleArn);
-    const recommendationService = new RecommendationService(accountId, roleArn);
+    const { accountId, roleArn, targetAccountId, accountType } = req.body;
+    
+    // Pass targetAccountId to the services
+    const costService = new CostService(accountId, roleArn, targetAccountId);
+    const recommendationService = new RecommendationService(accountId, roleArn, targetAccountId);
 
     const results = await Promise.all([
       costService.getTotalMonthlyCost(), costService.getServiceCosts(),
@@ -19,13 +21,15 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
       costService.getResourceCosts(), costService.getProjectCosts(),
       recommendationService.getRecommendations(), costService.getCostTrendData(),
       costService.getDailyCostData(), costService.getWeeklyCostData(),
-      costService.getTopSpendingResources()
+      costService.getTopSpendingResources(),
+      // Fetch linked accounts if this is a master payer and we are NOT drilling down into a specific account
+      (accountType === 'master' && !targetAccountId) ? costService.getLinkedAccountsSummary() : Promise.resolve([])
     ]);
 
     const [
       totalCost, serviceCosts, regionCosts, userCosts, resourceCosts,
       projectCosts, recommendations, costTrendData, dailyCostData,
-      weeklyCostData, topSpendingResourcesRaw
+      weeklyCostData, topSpendingResourcesRaw, linkedAccountsSummary
     ] = results;
 
     const topSpendingResources = Array.isArray(topSpendingResourcesRaw) ? topSpendingResourcesRaw : [];
@@ -33,12 +37,18 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        totalMonthlyCost: totalCost != null ? totalCost : 0, serviceCosts: serviceCosts || [],
-        regionCosts: regionCosts || [], userCosts: userCosts || [],
-        resourceCosts: resourceCosts || [], projectCosts: projectCosts || [],
-        recommendations: recommendations || [], costTrendData: costTrendData || [],
-        dailyCostData: dailyCostData || [], weeklyCostData: weeklyCostData || [],
-        topSpendingResources
+        totalMonthlyCost: totalCost != null ? totalCost : 0, 
+        serviceCosts: serviceCosts || [],
+        regionCosts: regionCosts || [], 
+        userCosts: userCosts || [],
+        resourceCosts: resourceCosts || [], 
+        projectCosts: projectCosts || [],
+        recommendations: recommendations || [], 
+        costTrendData: costTrendData || [],
+        dailyCostData: dailyCostData || [], 
+        weeklyCostData: weeklyCostData || [],
+        topSpendingResources,
+        linkedAccountsSummary: linkedAccountsSummary || []
       },
       timestamp: new Date().toISOString()
     });
@@ -47,42 +57,42 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
 
 router.post('/services', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn } = req.body;
-    const costService = new CostService(accountId, roleArn);
+    const { accountId, roleArn, targetAccountId } = req.body;
+    const costService = new CostService(accountId, roleArn, targetAccountId);
     res.json({ success: true, data: await costService.getServiceCosts(), timestamp: new Date().toISOString() });
   } catch (error) { next(error); }
 });
 
 router.post('/users', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn } = req.body;
-    const costService = new CostService(accountId, roleArn);
+    const { accountId, roleArn, targetAccountId } = req.body;
+    const costService = new CostService(accountId, roleArn, targetAccountId);
     res.json({ success: true, data: await costService.getUserCosts(), timestamp: new Date().toISOString() });
   } catch (error) { next(error); }
 });
 
 router.post('/projects', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn } = req.body;
-    const costService = new CostService(accountId, roleArn);
+    const { accountId, roleArn, targetAccountId } = req.body;
+    const costService = new CostService(accountId, roleArn, targetAccountId);
     res.json({ success: true, data: await costService.getProjectCosts(), timestamp: new Date().toISOString() });
   } catch (error) { next(error); }
 });
 
 router.post('/recommendations', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn } = req.body;
-    const recommendationService = new RecommendationService(accountId, roleArn);
+    const { accountId, roleArn, targetAccountId } = req.body;
+    const recommendationService = new RecommendationService(accountId, roleArn, targetAccountId);
     res.json({ success: true, data: await recommendationService.getRecommendations(), timestamp: new Date().toISOString() });
   } catch (error) { next(error); }
 });
 
 router.post('/resources', validateResourceRequest, async (req, res, next) => {
   try {
-    const { accountId, roleArn, serviceName } = req.body;
+    const { accountId, roleArn, serviceName, targetAccountId } = req.body;
     const command = new InvokeCommand({
       FunctionName: process.env.HEAVY_LAMBDA_FUNCTION_NAME || 'resource-fetcher-lambda',
-      Payload: JSON.stringify({ accountId, roleArn, serviceName }),
+      Payload: JSON.stringify({ accountId, roleArn, serviceName, targetAccountId }),
       InvocationType: 'RequestResponse',
     });
 
@@ -102,4 +112,3 @@ router.post('/resources', validateResourceRequest, async (req, res, next) => {
 });
 
 export default router;
-

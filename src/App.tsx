@@ -11,20 +11,20 @@ function App() {
   const [awsCredentials, setAwsCredentials] = useState<{
     accountId: string;
     roleArn: string;
+    accountType?: 'standalone' | 'master'; // FIXED: Added accountType to state
   } | null>(null);
 
-  const handleGetDetails = (accountId: string, roleArn: string) => {
-    setAwsCredentials({ accountId, roleArn });
+  // FIXED: Added accountType parameter
+  const handleGetDetails = (accountId: string, roleArn: string, accountType?: 'standalone' | 'master') => {
+    setAwsCredentials({ accountId, roleArn, accountType });
     setCurrentPage('dashboard');
   };
 
-  
   const handleBackToInputs = () => {
     setCurrentPage('inputs');
     setAwsCredentials(null);
   };
 
-  // --- ADDED: Bypass flag for local development ---
   const isLocalDev = import.meta.env.DEV;
 
   if (auth.isLoading && !isLocalDev) {
@@ -55,7 +55,6 @@ function App() {
     }
   }
 
-  // This fallback return (the login screen) must ALWAYS be at the very bottom
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
