@@ -1,7 +1,4 @@
 // resource-fetcher-lambda/costService.js
-// Robust Athena wrapper with short synchronous polling to avoid API Gateway 29s timeouts,
-// graceful fallbacks and defensive error handling.
-
 import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand } from "@aws-sdk/client-athena";
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 
@@ -114,10 +111,20 @@ export class CostService {
   }
 
   getDateRange(months = 1) {
-    const end = new Date(); end.setDate(end.getDate() - 1);
-    const start = new Date(end); start.setMonth(end.getMonth() - (months - 1)); start.setDate(1);
-    const fmt = d => d.toISOString().split('T')[0];
-    return { Start: fmt(start), End: fmt(end) };
+    const endDate = new Date();
+    const startDate = new Date();
+    if (months === 1) startDate.setDate(1);
+    else {
+      startDate.setMonth(startDate.getMonth() - months);
+      startDate.setDate(1);
+    }
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    return { Start: formatDate(startDate), End: formatDate(endDate) };
   }
 
   chunkArray(arr, size) {
@@ -157,6 +164,7 @@ export class CostService {
     const out = new Map();
     if (!resourceIds || resourceIds.length === 0) return out;
     const chunks = this.chunkArray(resourceIds, this.bulkChunkSize);
+    
     for (const chunk of chunks) {
       const vals = this.safeValuesForIds(chunk);
       const sql = `
@@ -168,6 +176,10 @@ export class CostService {
       `;
       try {
         const res = await this.runAthenaQuery(sql);
+        if (res.state === 'FAILED' && res.reason && (res.reason.includes('TABLE_NOT_FOUND') || res.reason.includes('does not exist'))) {
+            console.warn('[costService] resource_creation_map table missing. Skipping all creation events.');
+            break; 
+        }
         if (res.state === 'SUCCEEDED' && Array.isArray(res.rows)) {
           res.rows.forEach(r => {
             if (!r || !r.target_id) return;
@@ -177,7 +189,7 @@ export class CostService {
             out.set(String(r.target_id), { createdDate: r.first_create ? this.toIsoSafe(r.first_create) : null, createdBy: createdBy || 'Not found in creation map' });
           });
         }
-      } catch (err) {}
+      } catch (err) { break; }
     }
     return out;
   }
@@ -186,6 +198,7 @@ export class CostService {
     const out = new Map();
     if (!resourceIds || resourceIds.length === 0) return out;
     const chunks = this.chunkArray(resourceIds, this.bulkChunkSize);
+    
     for (const chunk of chunks) {
       const vals = this.safeValuesForIds(chunk);
       const sql = `
@@ -197,6 +210,10 @@ export class CostService {
       `;
       try {
         const res = await this.runAthenaQuery(sql);
+        if (res.state === 'FAILED' && res.reason && (res.reason.includes('TABLE_NOT_FOUND') || res.reason.includes('does not exist'))) {
+            console.warn('[costService] resource_deletion_map table missing. Skipping all deletion events.');
+            break; 
+        }
         if (res.state === 'SUCCEEDED' && Array.isArray(res.rows)) {
           res.rows.forEach(r => {
             if (!r || !r.target_id) return;
@@ -206,14 +223,14 @@ export class CostService {
             out.set(String(r.target_id), { deletionDate: r.last_delete ? this.toIsoSafe(r.last_delete) : null, deletedBy: deletedBy || 'Not found in deletion map' });
           });
         }
-      } catch (err) {}
+      } catch (err) { break; }
     }
     return out;
   }
 
   async getResourcesForService(serviceName, targetAccountId = null) {
     try {
-      const { Start, End } = this.getDateRange(1); // FIXED: Fetching Start and End dates for current month
+      const { Start, End } = this.getDateRange(1);
       const candidateCodes = new Set([serviceName]);
       for (const [code, friendly] of Object.entries(this.serviceNameMap)) {
         if (friendly.toLowerCase() === String(serviceName).toLowerCase()) candidateCodes.add(code);
@@ -221,44 +238,48 @@ export class CostService {
       const codesArr = Array.from(candidateCodes).map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       const targetAccountFilter = targetAccountId ? `AND line_item_usage_account_id = '${String(targetAccountId).replace(/'/g, "''")}'` : '';
 
-      // Primary Attempt: With Element_At (Map tags) and Current Month dates
+      // FIXED: Adding line_item_usage_type aggregation to see exactly why it's being billed
       let sql = `
         SELECT
+            line_item_usage_account_id,
             line_item_resource_id, 
             COALESCE(line_item_product_code, 'Unknown') AS product_code, 
             product_location,
             SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost, 
             MAX(element_at(resource_tags, 'user:Owner')) AS owner_tag,
-            MAX(element_at(resource_tags, 'user:Project')) AS project_tag
+            MAX(element_at(resource_tags, 'user:Project')) AS project_tag,
+            array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
         WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
           AND line_item_resource_id IS NOT NULL 
           AND TRIM(line_item_resource_id) <> ''
           AND COALESCE(line_item_product_code, 'Unknown') IN (${codesArr})
           ${targetAccountFilter}
-        GROUP BY 1, 2, 3
-        ORDER BY 4 DESC;
+        GROUP BY 1, 2, 3, 4
+        ORDER BY 5 DESC;
       `;
 
       let baseRes = await this.runAthenaQuery(sql);
 
-      // Fallback Attempt: Drop tags entirely if column does not exist (Using Current Month dates)
+      // Fallback Attempt
       if (baseRes.state === 'FAILED' && baseRes.reason && (baseRes.reason.includes('COLUMN_NOT_FOUND') || baseRes.reason.includes('TABLE_NOT_FOUND') || baseRes.reason.includes('cannot be resolved'))) {
         console.warn(`[costService] resource_tags column missing! Executing fallback query...`);
         sql = `
           SELECT
+              line_item_usage_account_id,
               line_item_resource_id, 
               COALESCE(line_item_product_code, 'Unknown') AS product_code, 
               product_location,
-              SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost
+              SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
+              array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
           FROM ${this.athenaDatabase}.${this.athenaCurTable}
           WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
             AND line_item_resource_id IS NOT NULL 
             AND TRIM(line_item_resource_id) <> ''
             AND COALESCE(line_item_product_code, 'Unknown') IN (${codesArr})
             ${targetAccountFilter}
-          GROUP BY 1, 2, 3
-          ORDER BY 4 DESC;
+          GROUP BY 1, 2, 3, 4
+          ORDER BY 5 DESC;
         `;
         baseRes = await this.runAthenaQuery(sql);
       }
@@ -288,6 +309,7 @@ export class CostService {
         const status = d.deletionDate ? 'terminated' : 'running';
 
         return {
+          accountId: r.line_item_usage_account_id || 'Unknown',
           id: r.line_item_resource_id,
           name: r.line_item_resource_id,
           type: this.serviceNameMap[r.product_code] || r.product_code,
@@ -300,6 +322,7 @@ export class CostService {
           deletionDate: d.deletionDate || null,
           deletedBy: d.deletedBy || null,
           cost: Number(r.total_cost || 0),
+          usageTypes: r.usage_types || 'Unknown', // FIXED: Provide to frontend
           tags,
           specifications: {}
         };

@@ -1,28 +1,76 @@
-// backend/routes/chat.js
 import express from 'express';
 import { BedrockAgentRuntimeClient, InvokeAgentCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import { fromTemporaryCredentials } from "@aws-sdk/credential-providers"; 
 
 const router = express.Router();
 
-// Initialize the Bedrock Agent Client
-// It uses the credentials from your environment or IAM role attached to the backend
-const client = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// Define the Master Payer role ARN you created in Step 1
+const CROSS_ACCOUNT_ROLE_ARN = "arn:aws:iam::252078852689:role/CrossAccountBedrockAgentRole";
+
+// Initialize the Bedrock Client by assuming the cross-account role
+const client = new BedrockAgentRuntimeClient({ 
+    region: "us-east-1", 
+    credentials: fromTemporaryCredentials({
+        params: {
+            RoleArn: CROSS_ACCOUNT_ROLE_ARN,
+            RoleSessionName: "BedrockAgentCrossAccountSession",
+            DurationSeconds: 3600
+        }
+    })
+});
 
 router.post('/', async (req, res) => {
   try {
-    const { accountId, prompt, sessionId } = req.body;
+    const { accountId, prompt, sessionId, accountType } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    // Add context to the prompt so the Bedrock agent knows which account to query via Athena
-    const contextualizedPrompt = `The user is asking about AWS Account ID: ${accountId}. Contextualize your data and Athena queries for this specific account. User Query: ${prompt}`;
+    // Pass live dates so the LLM doesn't hallucinate past years
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+    // Automatically detect if we are querying the Master Payer account
+    const isMaster = accountType === 'master' || accountId === '252078852689';
+
+    // Build a bulletproof XML-style prompt to force strict obedience from the LLM
+    let contextualizedPrompt = `
+<system_context>
+Today's Date: ${todayStr}
+Current Month Start: ${monthStart}
+Context Account ID: ${accountId}
+</system_context>
+
+<critical_rules>
+`;
+
+    if (isMaster) {
+        // Master Payer routing logic
+        contextualizedPrompt += `1. THIS IS THE MASTER PAYER ORGANIZATION ACCOUNT. 
+2. DO NOT filter queries with "WHERE line_item_usage_account_id = '${accountId}'" unless the user explicitly asks for the master account's isolated costs.
+3. To get a breakdown by linked account, simply GROUP BY "line_item_usage_account_id". NEVER invent or hallucinate tags for this.
+`;
+    } else {
+        // Linked Account routing logic
+        contextualizedPrompt += `1. THIS IS A SINGLE LINKED ACCOUNT.
+2. You MUST append "WHERE line_item_usage_account_id = '${accountId}'" to every single CUR query to restrict data to this specific account.
+`;
+    }
+
+    contextualizedPrompt += `</critical_rules>
+
+USER QUERY: ${prompt}`;
+
+    // FIXED: Appending Date.now() ensures Bedrock doesn't remember the old, broken system prompts 
+    // from your previous chats if the frontend isn't passing a unique sessionId.
+    const safeSessionId = sessionId || `session-${accountId}-${Date.now()}`;
 
     const command = new InvokeAgentCommand({
       agentId: process.env.BEDROCK_AGENT_ID, 
       agentAliasId: process.env.BEDROCK_AGENT_ALIAS_ID, 
-      sessionId: sessionId || `session-${accountId}`,
+      sessionId: safeSessionId,
       inputText: contextualizedPrompt,
     });
 

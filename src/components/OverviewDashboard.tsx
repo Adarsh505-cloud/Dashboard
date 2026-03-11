@@ -53,6 +53,7 @@ interface OverviewData {
     potentialSavings: number;
   }>;
   costTrendData?: CostTrendData[];
+  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>;
   // removed topSpendingResources from OverviewData
 }
 
@@ -505,7 +506,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
 
       {/* NEW: Carbon Footprint Map Widget */}
       <div className="col-span-1 lg:col-span-2">
-        <CarbonFootprintMap />
+        {/* FIXED: Pass the live data from Athena instead of letting it fetch the CSV */}
+        <CarbonFootprintMap data={data.carbonFootprint} />
       </div>
 
     </div>
