@@ -49,7 +49,7 @@ interface WeeklyCostData {
 
 // This is the main interface to fix.
 // Add all missing properties here.
-interface ApiData {
+export interface ApiData {
   totalMonthlyCost: number;
   serviceCosts: Array<{ service: string; cost: number; region: string }>;
   regionCosts: Array<{ region: string; cost: number }>;
@@ -73,7 +73,9 @@ interface ApiData {
   top_spending_resources?: TopSpendingResource[];
   topResources?: TopSpendingResource[];
   top_resources?: TopSpendingResource[];
-  linkedAccountsSummary?: Array<{ accountId: string; cost: number }>; // ADDED THIS LINE
+  linkedAccountsSummary?: Array<{ accountId: string; accountName?: string; cost: number }>;
+  // FIXED: Added carbon footprint type
+  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>; 
 }
 
 interface UseApiDataResult {

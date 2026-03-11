@@ -1,5 +1,5 @@
 // src/components/Dashboard.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   ArrowLeft,
   Download,
@@ -45,10 +45,10 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const dashboardRef = useRef<HTMLDivElement>(null);
 
   // Combine parent credentials with local drill-down target
-  const activeCredentials = {
+  const activeCredentials = useMemo(() => ({
     ...credentials,
     targetAccountId
-  };
+  }), [credentials.accountId, credentials.roleArn, credentials.accountType, targetAccountId]);
 
   const { data, loading, error, retry } = useApiData(activeCredentials);
 
@@ -377,7 +377,8 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             {/* Dashboard Content */}
             <div ref={dashboardRef} className="space-y-8">
               {activeTab === 'overview' && <OverviewDashboard data={data} isExporting={isExporting} />}
-              {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={credentials} isExporting={isExporting} />}
+              {/* FIXED: Passing activeCredentials instead of credentials so the backend knows which account we are drilling down into */}
+              {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={activeCredentials} isExporting={isExporting} />}
               {activeTab === 'users' && <UserCostChart data={data.userCosts} isExporting={isExporting} />}
               {activeTab === 'resources' && (
                 <ResourceChart 

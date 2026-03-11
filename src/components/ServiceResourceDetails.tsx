@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, Server, User, Calendar, Tag, MapPin, DollarSign, Activity, Search, Download,
   RefreshCw, AlertCircle, CheckCircle, Clock, Database, HardDrive, Cpu, MemoryStick,
-  Loader, XCircle, Filter, Shield, Globe, Zap, Info
+  Loader, XCircle, Filter, Shield, Globe, Zap, Info, Building2
 } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -10,6 +10,7 @@ import { apiService } from '../services/api';
 
 interface ResourceDetail {
   id: string;
+  accountId?: string;
   name: string;
   type: string;
   region: string;
@@ -18,6 +19,7 @@ interface ResourceDetail {
   createdDate: string | null;
   status: 'Active' | 'terminated' | 'unknown' | 'running' | 'stopped' | 'pending';
   cost: number;
+  usageTypes?: string; // FIXED: Catch the usage types from backend
   tags: Array<{ key: string; value: string }>;
   specifications?: {
     instanceType?: string;
@@ -115,6 +117,7 @@ const normalizeResourceData = (apiResponse: any[], serviceName: string): Resourc
       
       byCanonical.set(canonical, {
         id: canonical,
+        accountId: r.accountId || r.account_id || r.line_item_usage_account_id || 'Unknown',
         name: r.name || rawId,
         type: resourceType,
         region: r.product_location || r.region || (r.raw_resource_id?.split(':')[3]) || 'unknown',
@@ -126,6 +129,7 @@ const normalizeResourceData = (apiResponse: any[], serviceName: string): Resourc
         deletedBy: extractUserNameFromArn(r.deletedBy || r.deleted_user || r.deleted_by || null),
         status: normalizedStatus,
         cost: Number(r.total_cost || r.cost || 0),
+        usageTypes: r.usageTypes || r.usage_types || 'Unknown', // FIXED: Capture usage types
         tags: Array.isArray(r.tags) ? r.tags : (r.resource_tags ? Object.entries(r.resource_tags).map(([k, v]) => ({ key: k, value: v })) : []),
         specifications: r.specifications || {},
         ownerTooltip: r.owner === 'Unknown (from CUR)' ? 'No user_owner cost allocation tag found' : 'From cost allocation tags'
@@ -219,9 +223,27 @@ const ResourceCard: React.FC<{ resource: ResourceDetail }> = React.memo(({ resou
                 {formatResourceName(resource.name)}
               </h3>
               
-              <div className="bg-slate-50 rounded-lg px-3 py-2 my-2 flex items-center gap-2">
-                <span className="text-sm text-slate-500 font-medium">Resource ID:</span>
-                <code className="text-sm text-slate-600 font-mono break-all">{resource.id}</code>
+              <div className="flex flex-col gap-2 my-3">
+                <div className="bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 border border-slate-100">
+                  <span className="text-sm text-slate-500 font-medium shrink-0">Resource ID:</span>
+                  <code className="text-sm text-slate-600 font-mono break-all">{resource.id}</code>
+                </div>
+                {/* FIXED: Added Billed To Account to prove the cost routing */}
+                {resource.accountId && resource.accountId !== 'Unknown' && (
+                  <div className="bg-indigo-50/50 rounded-lg px-3 py-2 flex items-center gap-2 border border-indigo-100">
+                    <Building2 className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <span className="text-sm text-indigo-700 font-medium shrink-0">Billed To Account:</span>
+                    <code className="text-sm text-indigo-800 font-mono font-bold">{resource.accountId}</code>
+                  </div>
+                )}
+                {/* FIXED: Added Usage Type to explain *why* it was billed */}
+                {resource.usageTypes && resource.usageTypes !== 'Unknown' && (
+                  <div className="bg-amber-50/50 rounded-lg px-3 py-2 flex items-center gap-2 border border-amber-100">
+                    <Activity className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-sm text-amber-700 font-medium shrink-0">Usage Type:</span>
+                    <code className="text-xs text-amber-800 font-mono truncate" title={resource.usageTypes}>{resource.usageTypes}</code>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2 my-4">
@@ -316,14 +338,14 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
   
   const handleExport = useCallback(() => {
       const csvRows = [];
-      const headers = ['id', 'name', 'type', 'region', 'owner', 'project', 'status', 'createdDate', 'createdBy', 'deletionDate', 'deletedBy', 'cost'];
+      const headers = ['accountId', 'id', 'name', 'type', 'region', 'owner', 'project', 'status', 'createdDate', 'createdBy', 'deletionDate', 'deletedBy', 'cost', 'usageTypes'];
       csvRows.push(headers.join(','));
       filteredResources.forEach(r => {
         const row = [
-          `"${r.id}"`, `"${(r.name || '').replace(/"/g, '""')}"`, `"${(r.type || '').replace(/"/g, '""')}"`,
+          `"${r.accountId || ''}"`, `"${r.id}"`, `"${(r.name || '').replace(/"/g, '""')}"`, `"${(r.type || '').replace(/"/g, '""')}"`,
           `"${(r.region || '')}"`, `"${(r.owner || '').replace(/"/g, '""')}"`, `"${(r.project || '').replace(/"/g, '""')}"`,
           `"${r.status}"`, `"${r.createdDate || ''}"`, `"${r.createdBy || ''}"`, `"${r.deletionDate || ''}"`,
-          `"${r.deletedBy || ''}"`, `${r.cost}`
+          `"${r.deletedBy || ''}"`, `${r.cost}`, `"${r.usageTypes || ''}"`
         ];
         csvRows.push(row.join(','));
       });

@@ -12,6 +12,7 @@ import {
   Loader,
   Users,
   Trash2,
+  Building2 // Added Building2 icon for Master indicator
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import ConnectAccountModal from './ConnectAccountModal';
@@ -20,7 +21,8 @@ import UserManagementPage from './UserManagementPage';
 
 // --- PROPS AND TYPES ---
 interface InputsPageProps {
-  onGetDetails: (accountId: string, roleArn: string) => void;
+  // FIXED: Added accountType to onGetDetails
+  onGetDetails: (accountId: string, roleArn: string, accountType?: 'standalone' | 'master') => void;
   auth: AuthContextProps;
 }
 
@@ -28,6 +30,7 @@ interface Account {
   accountId: string;
   roleArn: string;
   name: string;
+  accountType?: 'standalone' | 'master'; // FIXED: Added accountType
 }
 
 // --- MAIN COMPONENT ---
@@ -41,7 +44,6 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
 
   const user = auth.user?.profile;
-  // Force admin privileges locally, otherwise check Cognito groups
   const isLocalDev = import.meta.env.DEV;
   const isAdmin = isLocalDev || ((user?.['cognito:groups'] as string[])?.includes('Admins') ?? false);
 
@@ -62,11 +64,10 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
       }
     };
 
-    const isLocalDev = import.meta.env.DEV;
     if (auth.isAuthenticated || isLocalDev) {
         fetchAccounts();
     }
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, isLocalDev]);
 
   useEffect(() => {
     apiService.checkHealth()
@@ -74,20 +75,23 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
       .catch(() => setBackendStatus('disconnected'));
   }, []);
 
-  const handleConnectNewAccount = async (newAccountId: string, newRoleArn: string, newAccountName: string) => {
+  // FIXED: Added accountType parameter so the modal selection isn't dropped
+  const handleConnectNewAccount = async (newAccountId: string, newRoleArn: string, newAccountName: string, accountType: 'standalone' | 'master') => {
     setIsModalOpen(false);
     
     const newAccount = {
       accountId: newAccountId,
       roleArn: newRoleArn,
       name: newAccountName,
+      accountType: accountType // Passed to the backend DB
     };
 
     try {
         const response = await apiService.saveOnboardedAccount(newAccount);
         if (response.success && response.data) {
             setAccounts(prev => [...prev, response.data!]);
-            onGetDetails(newAccountId, newRoleArn);
+            // Passed to the Dashboard
+            onGetDetails(newAccountId, newRoleArn, accountType);
         } else {
             throw new Error(response.error || "Failed to save account");
         }
@@ -98,7 +102,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   };
   
   const cognitoConfig = {
-    domain: "us-west-2xf0vqvyuh.auth.us-west-2.amazoncognito.com", // <-- FIX: Removed https://
+    domain: "us-west-2xf0vqvyuh.auth.us-west-2.amazoncognito.com",
     clientId: "641sh8j3j5iv62aot4ecnlpc3q",
     redirectUri: "https://cloudbillanalyzer.epiuse-aws.com",
   };
@@ -223,7 +227,8 @@ const SidebarButton = ({ text, icon: Icon, active, onClick }: any) => (
     </button>
 );
 
-const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAccount }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string) => void, onModalOpen: () => void, onRemoveAccount: (id: string) => void }) => (
+// FIXED: onGetDetails now includes the 3rd parameter, and we pass acc.accountType below
+const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAccount }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string, type?: 'standalone' | 'master') => void, onModalOpen: () => void, onRemoveAccount: (id: string) => void }) => (
     <div>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
             <div className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg">
@@ -235,12 +240,19 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAcc
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Onboarded Accounts</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {accounts.map(acc => (
-                <div key={acc.accountId} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between transition-all hover:shadow-lg hover:-translate-y-1">
+                <div key={acc.accountId} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden">
+                    {/* Indicator for Master Accounts */}
+                    {acc.accountType === 'master' && (
+                        <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          MASTER
+                        </div>
+                    )}
                     <div>
-                        <div className="flex items-center gap-4 mb-4">
+                        <div className="flex items-center gap-4 mb-4 mt-2">
                            <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0"><Cloud className="w-6 h-6"/></div>
                            <div>
-                             <h3 className="text-lg font-bold text-gray-900">{acc.name}</h3>
+                             <h3 className="text-lg font-bold text-gray-900 pr-4">{acc.name}</h3>
                              <p className="text-sm text-gray-500 font-mono">{acc.accountId}</p>
                            </div>
                         </div>
@@ -253,8 +265,9 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAcc
                         </div>
                     </div>
                     <div className="flex gap-2 mt-6">
+                        {/* FIXED: Passing the accountType to the Dashboard on click */}
                         <button
-                            onClick={() => onGetDetails(acc.accountId, acc.roleArn)}
+                            onClick={() => onGetDetails(acc.accountId, acc.roleArn, acc.accountType)}
                             className="w-full py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                         >
                             Analyze
@@ -271,7 +284,7 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAcc
                 </div>
             ))}
             {isAdmin && (
-              <button onClick={onModalOpen} className="bg-white p-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/50 transition-colors flex flex-col items-center justify-center text-center">
+              <button onClick={onModalOpen} className="bg-white p-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/50 transition-colors flex flex-col items-center justify-center text-center mt-0">
                   <PlusCircle className="w-10 h-10 text-gray-400 mb-2" />
                   <span className="font-semibold text-gray-700">Onboard a New Account</span>
               </button>

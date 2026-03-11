@@ -1,9 +1,18 @@
+// src/components/CarbonFootprintMap.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import Papa from 'papaparse';
-import { Cloud, ArrowUp, Loader2 } from 'lucide-react';
+import { Cloud, ArrowUp } from 'lucide-react';
 
-// --- TYPE DEFINITIONS (Moved Outside Component) ---
+interface CarbonFootprintData {
+  region: string;
+  emissions: number;
+  count: number;
+}
+
+interface CarbonFootprintMapProps {
+  data?: CarbonFootprintData[];
+}
+
 interface RegionData {
   emissions: number;
   count: number;
@@ -13,10 +22,11 @@ interface GroupedData {
   [key: string]: RegionData;
 }
 
-// --- CONSTANTS (Moved Outside Component) ---
+// --- CONSTANTS ---
 const REGION_COORDS: { [key: string]: [number, number] } = {
   'us-east-1': [-77.0369, 38.9072],
   'us-east-2': [-82.9988, 39.9612],
+  'us-west-1': [-122.0000, 37.3394],
   'us-west-2': [-122.3321, 47.6062],
   'eu-west-1': [-6.2603, 53.3498],
   'eu-central-1': [8.6821, 50.1109],
@@ -26,18 +36,18 @@ const REGION_COORDS: { [key: string]: [number, number] } = {
   'ap-southeast-2': [151.2093, -33.8688],
   'sa-east-1': [-46.6333, -23.5505],
   'ca-central-1': [-75.6972, 45.4215],
-  'eu-west-2': [-0.1276, 51.5072]
+  'eu-west-2': [-0.1276, 51.5072],
+  'eu-north-1': [18.0686, 59.3293],
+  'Global': [0, 0] // Fallback for global emissions like CloudFront
 };
 
-
-const CarbonFootprintMap: React.FC = () => {
+const CarbonFootprintMap: React.FC<CarbonFootprintMapProps> = ({ data = [] }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
-  const [regionData, setRegionData] = useState<GroupedData | null>(null);
-  const [totalResources, setTotalResources] = useState<number | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  const [regionData, setRegionData] = useState<GroupedData>({});
+  const [totalResources, setTotalResources] = useState<number>(0);
 
   const prettyNum = (n: number) => {
     if (n === null || isNaN(n)) return '0';
@@ -75,51 +85,7 @@ const CarbonFootprintMap: React.FC = () => {
     return `<span class="emission-badge ${className}">${text}</span>`;
   };
 
-  useEffect(() => {
-    Papa.parse('https://s3.us-west-2.amazonaws.com/cloudbillanalyzer.epiuse-aws.com/titans-carbon-emission-00001.csv', {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data as Array<{ [key: string]: string }>;
-        if (!data.length) {
-          setError('No data found in CSV.');
-          setLoading(false);
-          return;
-        }
-
-        const regionCol = Object.keys(data[0]).find(k => k.toLowerCase().includes('region'));
-        const emissionCol = Object.keys(data[0]).find(k => k.toLowerCase().includes('emiss'));
-        if (!regionCol || !emissionCol) {
-          setError('Missing required columns (region, emissions) in CSV.');
-          setLoading(false);
-          return;
-        }
-
-        const grouped: GroupedData = {};
-        let totalRes = 0;
-        data.forEach(row => {
-          const region = (row[regionCol] || '').trim();
-          if (!region) return;
-          const val = parseFloat(row[emissionCol]) || 0;
-          if (!grouped[region]) grouped[region] = { emissions: 0, count: 0 };
-          grouped[region].emissions += val;
-          grouped[region].count += 1;
-          totalRes++;
-        });
-
-        setRegionData(grouped);
-        setTotalResources(totalRes);
-        setLoading(false);
-      },
-      error: (err) => {
-        console.error(err);
-        setError('Error loading or parsing CSV file.');
-        setLoading(false);
-      }
-    });
-  }, []);
-
+  // FIXED: Initialize Map
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
       mapRef.current = L.map(mapContainerRef.current, { zoomControl: true }).setView([20, 0], 2);
@@ -127,9 +93,34 @@ const CarbonFootprintMap: React.FC = () => {
     }
   }, []);
 
+  // FIXED: Process the Live Athena Data directly instead of PapaParse
   useEffect(() => {
-    if (!mapRef.current || !regionData) return;
-    const map = mapRef.current; // Create a local variable to avoid null issues inside loops
+    if (!data || data.length === 0) return;
+
+    const grouped: GroupedData = {};
+    let totalRes = 0;
+
+    data.forEach(row => {
+      const region = row.region.trim();
+      if (!region) return;
+
+      if (!grouped[region]) {
+        grouped[region] = { emissions: 0, count: 0 };
+      }
+      
+      grouped[region].emissions += row.emissions;
+      grouped[region].count += row.count;
+      totalRes += row.count;
+    });
+
+    setRegionData(grouped);
+    setTotalResources(totalRes);
+  }, [data]);
+
+  // FIXED: Draw markers whenever the data updates
+  useEffect(() => {
+    if (!mapRef.current || Object.keys(regionData).length === 0) return;
+    const map = mapRef.current;
 
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
@@ -139,7 +130,7 @@ const CarbonFootprintMap: React.FC = () => {
 
     regions.forEach(region => {
       const coords = REGION_COORDS[region];
-      if (!coords) return;
+      if (!coords) return; // Skip if region coords aren't mapped
 
       const { emissions, count } = regionData[region];
       const color = getEmissionColor(emissions, maxEmission);
@@ -193,7 +184,6 @@ const CarbonFootprintMap: React.FC = () => {
           </div>
         </div>`;
       
-      // **FIXED**: Added check for map before adding marker
       const marker = L.marker([coords[1], coords[0]], { icon })
         .addTo(map)
         .bindPopup(popupContent);
@@ -231,33 +221,27 @@ const CarbonFootprintMap: React.FC = () => {
               <Cloud className="text-blue-600" />
               Cloud Carbon Footprint
             </h3>
-            <p className="text-gray-500">Geographical distribution of carbon emissions</p>
+            <p className="text-gray-500">Live geographic distribution of carbon emissions from Athena</p>
           </div>
           <div className="flex gap-4">
             <div className="text-right">
-              <div className="text-sm text-gray-500 font-medium">Total Resources</div>
-              <div className="text-2xl font-bold text-gray-800">{totalResources ?? '—'}</div>
+              <div className="text-sm text-gray-500 font-medium">Unique Resources</div>
+              <div className="text-2xl font-bold text-gray-800">{totalResources || '—'}</div>
             </div>
             <div className="text-right">
-              <div className="text-sm text-gray-500 font-medium">New Resources</div>
+              <div className="text-sm text-gray-500 font-medium">Trend</div>
               <div className="text-2xl font-bold text-gray-800 flex items-center justify-end gap-1">
-                {totalResources ? Math.floor(totalResources / 10) : '—'}
-                {totalResources && <ArrowUp className="w-4 h-4 text-green-500" />}
+                {totalResources ? 'Active' : '—'}
+                {totalResources > 0 && <ArrowUp className="w-4 h-4 text-green-500" />}
               </div>
             </div>
           </div>
         </div>
 
         <div className="relative h-[560px] rounded-lg border border-gray-200">
-          {loading && (
+          {(!data || data.length === 0) && (
             <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-20">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-              <p className="mt-4 text-gray-600">Loading Cloud Footprint data...</p>
-            </div>
-          )}
-          {error && (
-            <div className="absolute inset-0 bg-red-50 flex items-center justify-center z-20 p-4 rounded-lg">
-              <p className="text-red-600 font-semibold">{error}</p>
+              <p className="text-gray-500">No recent carbon footprint data found for this account.</p>
             </div>
           )}
           <div ref={mapContainerRef} className="h-full w-full rounded-lg" />
