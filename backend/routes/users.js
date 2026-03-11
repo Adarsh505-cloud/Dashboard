@@ -1,4 +1,3 @@
-// backend/routes/users.js
 import express from 'express';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { CognitoIdentityProviderClient, ListUsersCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand, AdminListGroupsForUserCommand, AdminRemoveUserFromGroupCommand, AdminDeleteUserCommand } from "@aws-sdk/client-cognito-identity-provider";
@@ -12,6 +11,26 @@ const userPoolId = process.env.COGNITO_USER_POOL_ID;
 const dbClient = new DynamoDBClient({ region });
 const docClient = DynamoDBDocumentClient.from(dbClient);
 const cognitoClient = new CognitoIdentityProviderClient({ region });
+
+// Helper: chunk array into batches of given size
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// Helper: batch write with chunking (DynamoDB limit is 25 items per BatchWriteCommand)
+async function batchWriteChunked(tableName, requests) {
+  if (!requests || requests.length === 0) return;
+  const chunks = chunkArray(requests, 25);
+  for (const chunk of chunks) {
+    await docClient.send(new BatchWriteCommand({
+      RequestItems: { [tableName]: chunk }
+    }));
+  }
+}
 
 // GET /api/users - List all users with their groups (Admins only)
 router.get('/', authenticateUser, isAdmin, async (req, res, next) => {
@@ -28,8 +47,8 @@ router.get('/', authenticateUser, isAdmin, async (req, res, next) => {
       });
       const { Groups } = await cognitoClient.send(listGroupsCommand);
       return {
-        id: user.Attributes.find(attr => attr.Name === 'sub')?.Value, // Use the sub (UUID) as the primary ID
-        username: user.Username, // Keep the original username for Cognito API calls
+        id: user.Attributes.find(attr => attr.Name === 'sub')?.Value,
+        username: user.Username,
         email: user.Attributes.find(attr => attr.Name === 'email')?.Value,
         status: user.UserStatus,
         createdAt: user.UserCreateDate ? user.UserCreateDate.toISOString() : null,
@@ -40,7 +59,6 @@ router.get('/', authenticateUser, isAdmin, async (req, res, next) => {
     res.json({ success: true, data: usersWithGroups });
   } catch (error) { next(error); }
 });
-
 
 // POST /api/users - Create a new user (Admins only)
 router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
@@ -55,10 +73,9 @@ router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
             Username: username,
             TemporaryPassword: temporaryPassword,
             UserAttributes: [{ Name: 'email', Value: email }, { Name: 'email_verified', Value: 'true' }],
-            // MessageAction: 'SUPPRESS' is removed to allow the invitation email to be sent.
         });
         const { User } = await cognitoClient.send(createUserCommand);
-        
+
         const addUserToGroupCommand = new AdminAddUserToGroupCommand({
             UserPoolId: userPoolId,
             Username: User.Username,
@@ -101,7 +118,7 @@ router.get('/:userId/accounts', authenticateUser, isAdmin, async (req, res, next
             ExpressionAttributeValues: { ":userId": userId },
         });
         const { Items } = await docClient.send(command);
-        res.json({ success: true, data: Items.map(item => item.accountId) });
+        res.json({ success: true, data: (Items || []).map(item => item.accountId) });
     } catch (error) { next(error); }
 });
 
@@ -113,6 +130,7 @@ router.put('/:userId/accounts', authenticateUser, isAdmin, async (req, res, next
         return res.status(400).json({ error: "accountIds must be an array." });
     }
     try {
+        // Delete existing mappings (chunked to 25 per batch)
         const queryCommand = new QueryCommand({
             TableName: "UserAccountMappings",
             KeyConditionExpression: "userId = :userId",
@@ -121,18 +139,25 @@ router.put('/:userId/accounts', authenticateUser, isAdmin, async (req, res, next
         });
         const { Items: existingMappings } = await docClient.send(queryCommand);
         if (existingMappings && existingMappings.length > 0) {
-            const deleteRequests = existingMappings.map(item => ({ DeleteRequest: { Key: { userId, accountId: item.accountId } } }));
-            await docClient.send(new BatchWriteCommand({ RequestItems: { "UserAccountMappings": deleteRequests } }));
+            const deleteRequests = existingMappings.map(item => ({
+              DeleteRequest: { Key: { userId, accountId: item.accountId } }
+            }));
+            await batchWriteChunked("UserAccountMappings", deleteRequests);
         }
+
+        // Insert new mappings (chunked to 25 per batch)
         if (accountIds.length > 0) {
-            const putRequests = accountIds.map(accountId => ({ PutRequest: { Item: { userId, accountId } } }));
-            await docClient.send(new BatchWriteCommand({ RequestItems: { "UserAccountMappings": putRequests } }));
+            const putRequests = accountIds.map(accountId => ({
+              PutRequest: { Item: { userId, accountId } }
+            }));
+            await batchWriteChunked("UserAccountMappings", putRequests);
         }
         res.json({ success: true, message: `Successfully updated accounts for user` });
     } catch (error) { next(error); }
 });
 
 // DELETE /api/users/:username - Delete a user (Admins only)
+// Also cleans up UserAccountMappings to avoid orphaned data
 router.delete('/:username', authenticateUser, isAdmin, async (req, res, next) => {
     const { username } = req.params;
     if (!username) {
@@ -140,11 +165,39 @@ router.delete('/:username', authenticateUser, isAdmin, async (req, res, next) =>
     }
 
     try {
+        // Look up the user's sub (UUID) to clean up DynamoDB mappings
+        const listUsersCommand = new ListUsersCommand({
+            UserPoolId: userPoolId,
+            Filter: `username = "${username}"`,
+            Limit: 1,
+        });
+        const { Users } = await cognitoClient.send(listUsersCommand);
+        const userId = Users?.[0]?.Attributes?.find(a => a.Name === 'sub')?.Value;
+
+        // Delete from Cognito
         const command = new AdminDeleteUserCommand({
             UserPoolId: userPoolId,
             Username: username
         });
         await cognitoClient.send(command);
+
+        // Clean up UserAccountMappings if we found the user's sub
+        if (userId) {
+            const queryCommand = new QueryCommand({
+                TableName: "UserAccountMappings",
+                KeyConditionExpression: "userId = :userId",
+                ExpressionAttributeValues: { ":userId": userId },
+                ProjectionExpression: "accountId",
+            });
+            const { Items: mappings } = await docClient.send(queryCommand);
+            if (mappings && mappings.length > 0) {
+                const deleteRequests = mappings.map(item => ({
+                  DeleteRequest: { Key: { userId, accountId: item.accountId } }
+                }));
+                await batchWriteChunked("UserAccountMappings", deleteRequests);
+            }
+        }
+
         res.status(200).json({ success: true, message: 'User deleted successfully' });
     } catch (error) {
         next(error);

@@ -1,13 +1,21 @@
-// backend/routes/accounts.js
 import express from 'express';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, PutCommand, QueryCommand, BatchGetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand, PutCommand, BatchGetCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { authenticateUser, isAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || "us-west-2" });
 const docClient = DynamoDBDocumentClient.from(client);
+
+// Helper: chunk array into batches of given size
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
 
 // GET /api/accounts - Fetch accounts based on user role
 router.get('/', authenticateUser, async (req, res, next) => {
@@ -17,7 +25,7 @@ router.get('/', authenticateUser, async (req, res, next) => {
       const { Items } = await docClient.send(command);
       return res.json({ success: true, data: Items || [] });
     } else {
-      const mappingCommand = new QueryCommand({
+      const mappingCommand = new (await import("@aws-sdk/lib-dynamodb")).QueryCommand({
         TableName: "UserAccountMappings",
         KeyConditionExpression: "userId = :userId",
         ExpressionAttributeValues: { ":userId": req.user.id },
@@ -28,24 +36,30 @@ router.get('/', authenticateUser, async (req, res, next) => {
         return res.json({ success: true, data: [] });
       }
 
-      const keys = mappings.map(m => ({ accountId: m.accountId }));
-      const batchGetCommand = new BatchGetCommand({
-        RequestItems: {
-          "OnboardedAccounts": {
-            Keys: keys,
-          },
-        },
-      });
+      // BatchGetCommand supports max 100 keys per request
+      const allKeys = mappings.map(m => ({ accountId: m.accountId }));
+      const keyChunks = chunkArray(allKeys, 100);
+      const allAccounts = [];
 
-      const { Responses } = await docClient.send(batchGetCommand);
-      return res.json({ success: true, data: Responses.OnboardedAccounts || [] });
+      for (const chunk of keyChunks) {
+        const batchGetCommand = new BatchGetCommand({
+          RequestItems: {
+            "OnboardedAccounts": { Keys: chunk },
+          },
+        });
+        const { Responses } = await docClient.send(batchGetCommand);
+        if (Responses?.OnboardedAccounts) {
+          allAccounts.push(...Responses.OnboardedAccounts);
+        }
+      }
+
+      return res.json({ success: true, data: allAccounts });
     }
   } catch (error) { next(error); }
 });
 
 // POST /api/accounts - Add a new account (Admins only)
 router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
-  // FIXED: Added accountType extraction
   const { accountId, roleArn, name, accountType } = req.body;
   if (!accountId || !roleArn || !name) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -54,7 +68,6 @@ router.post('/', authenticateUser, isAdmin, async (req, res, next) => {
   try {
     const command = new PutCommand({
       TableName: "OnboardedAccounts",
-      // FIXED: Save accountType to DynamoDB (defaulting to standalone if missing)
       Item: { accountId, roleArn, name, accountType: accountType || 'standalone' },
     });
     await docClient.send(command);
@@ -72,9 +85,7 @@ router.delete('/:accountId', authenticateUser, isAdmin, async (req, res, next) =
     try {
         const command = new DeleteCommand({
             TableName: "OnboardedAccounts",
-            Key: {
-                accountId: accountId
-            }
+            Key: { accountId }
         });
         await docClient.send(command);
         res.status(200).json({ success: true, message: 'Account deleted successfully' });

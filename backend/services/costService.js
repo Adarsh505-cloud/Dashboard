@@ -35,14 +35,28 @@ export class CostService {
     };
   }
 
+  // Validate targetAccountId is safe for SQL interpolation (12-digit string only)
   get targetAccountFilter() {
-    return this.targetAccountId ? ` AND line_item_usage_account_id = '${this.targetAccountId}' ` : '';
+    if (!this.targetAccountId) return '';
+    if (!/^\d{12}$/.test(this.targetAccountId)) {
+      throw new Error('Invalid targetAccountId format');
+    }
+    return ` AND line_item_usage_account_id = '${this.targetAccountId}' `;
   }
 
+  // Cache credentials per instance to avoid repeated STS AssumeRole calls
   async getCredentials() {
-    return fromTemporaryCredentials({
+    const now = Date.now();
+    // Reuse cached credentials if they have at least 5 minutes left
+    if (this._cachedCredentials && this._credentialExpiry && (this._credentialExpiry - now > 5 * 60 * 1000)) {
+      return this._cachedCredentials;
+    }
+    const credentials = await fromTemporaryCredentials({
       params: { RoleArn: this.roleArn, RoleSessionName: `cost-analysis-${Date.now()}`, DurationSeconds: 3600 },
     })();
+    this._cachedCredentials = credentials;
+    this._credentialExpiry = now + 3600 * 1000; // 1 hour from now
+    return credentials;
   }
 
   async getAthenaClient() {
@@ -637,24 +651,56 @@ export class CostService {
     }
   }
 
-  estimateResourcesCost(resources) {
-    let totalCost = 0;
-    resources.forEach(resource => {
-      const resourceType = resource.ResourceARN?.split(':')[2];
-      const resourceSubType = resource.ResourceARN?.split(':')[5]?.split('/')[0];
-      switch (resourceType) {
-        case 'ec2':
-          if (resourceSubType === 'instance') totalCost += Math.random() * 100 + 50;
-          else if (resourceSubType === 'volume') totalCost += Math.random() * 30 + 10;
-          break;
-        case 'rds': totalCost += Math.random() * 200 + 100; break;
-        case 's3': totalCost += Math.random() * 50 + 10; break;
-        case 'lambda': totalCost += Math.random() * 20 + 5; break;
-        case 'elasticloadbalancing': totalCost += Math.random() * 40 + 20; break;
-        default: totalCost += Math.random() * 30 + 10;
-      }
-    });
-    return Math.round(totalCost);
+  // Region-to-approximate-carbon-intensity mapping (gCO2eq/kWh)
+  // Source: approximate values based on AWS region energy mix data
+  static REGION_CARBON_INTENSITY = {
+    'US East (N. Virginia)': 0.415,
+    'US East (Ohio)': 0.415,
+    'US West (N. California)': 0.230,
+    'US West (Oregon)': 0.100,
+    'Europe (Ireland)': 0.320,
+    'Europe (Frankfurt)': 0.350,
+    'Europe (London)': 0.230,
+    'Asia Pacific (Tokyo)': 0.510,
+    'Asia Pacific (Singapore)': 0.410,
+    'Asia Pacific (Sydney)': 0.700,
+    'Asia Pacific (Mumbai)': 0.720,
+    'Canada (Central)': 0.130,
+    'South America (Sao Paulo)': 0.074,
+  };
+
+  async getCarbonFootprint() {
+    try {
+      const { Start, End } = this.getDateRange(1);
+      const sql = `
+        SELECT
+          CASE WHEN product_location IS NULL OR trim(product_location) = '' THEN 'Global'
+               WHEN lower(product_location) IN ('any','(any)','unknown') THEN 'Global'
+               ELSE product_location END AS region,
+          SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
+          COUNT(DISTINCT line_item_resource_id) AS resource_count
+        FROM ${this.athenaDatabase}.${this.athenaCurTable}
+        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
+          ${this.targetAccountFilter}
+        GROUP BY 1 ORDER BY total_cost DESC;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      return rows.map(r => {
+        const regionName = r.region || 'Global';
+        const cost = Number(r.total_cost || 0);
+        // Approximate emissions: cost as proxy for usage * carbon intensity
+        const intensity = CostService.REGION_CARBON_INTENSITY[regionName] || 0.400;
+        const emissions = Number((cost * intensity * 0.001).toFixed(4)); // tonnes CO2eq
+        return {
+          region: regionName,
+          emissions,
+          count: Number(r.resource_count || 0),
+        };
+      }).filter(x => x.emissions > 0 || x.count > 0);
+    } catch (err) {
+      console.error('Error fetching carbon footprint:', err.message);
+      return [];
+    }
   }
 
   async getTopSpendingResources() {

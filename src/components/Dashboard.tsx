@@ -396,7 +396,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         )}
       </div>
 
-      <ChatbotWidget accountId={credentials.accountId} />
+      <ChatbotWidget accountId={credentials.accountId} accountType={credentials.accountType} />
     </div>
   );
 };

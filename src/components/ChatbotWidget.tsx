@@ -1,10 +1,11 @@
 // src/components/ChatbotWidget.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Loader, Bot, Zap } from 'lucide-react';
-import { apiService } from '../services/api'; // ADDED: Import the apiService
+import { apiService } from '../services/api';
 
 interface ChatbotWidgetProps {
   accountId: string;
+  accountType?: 'standalone' | 'master';
 }
 
 interface Message {
@@ -22,7 +23,7 @@ const QUICK_QUERIES = [
   { label: '💡 Savings Tips', prompt: 'What are the top recommendations to reduce costs?' },
 ];
 
-const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ accountId }) => {
+const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ accountId, accountType }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -56,11 +57,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ accountId }) => {
     setIsLoading(true);
 
     try {
-      // MODIFIED: Use apiService instead of raw fetch
       const data = await apiService.sendChatMessage({
         accountId: accountId,
         prompt: text,
-        sessionId: 'session-' + accountId,
+        sessionId: `session-${accountId}-${Date.now()}`,
+        accountType,
       });
 
       const botMessage: Message = {

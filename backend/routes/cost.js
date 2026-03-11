@@ -1,4 +1,3 @@
-// backend/routes/cost.js
 import express from 'express';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { validateCredentials, validateResourceRequest } from '../middleware/validation.js';
@@ -11,7 +10,7 @@ const lambdaClient = new LambdaClient({});
 router.post('/analysis', validateCredentials, async (req, res, next) => {
   try {
     const { accountId, roleArn, targetAccountId, accountType } = req.body;
-    
+
     const costService = new CostService(accountId, roleArn, targetAccountId);
     const recommendationService = new RecommendationService(accountId, roleArn, targetAccountId);
 
@@ -23,14 +22,14 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
       costService.getDailyCostData(), costService.getWeeklyCostData(),
       costService.getTopSpendingResources(),
       (accountType === 'master' && !targetAccountId) ? costService.getLinkedAccountsSummary() : Promise.resolve([]),
-      costService.getCarbonFootprint() // FIXED: Call the new Carbon Footprint method
+      costService.getCarbonFootprint()
     ]);
 
     const [
       totalCost, serviceCosts, regionCosts, userCosts, resourceCosts,
       projectCosts, recommendations, costTrendData, dailyCostData,
       weeklyCostData, topSpendingResourcesRaw, linkedAccountsSummary,
-      carbonFootprint // FIXED: Capture the results
+      carbonFootprint
     ] = results;
 
     const topSpendingResources = Array.isArray(topSpendingResourcesRaw) ? topSpendingResourcesRaw : [];
@@ -38,19 +37,19 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        totalMonthlyCost: totalCost != null ? totalCost : 0, 
+        totalMonthlyCost: totalCost != null ? totalCost : 0,
         serviceCosts: serviceCosts || [],
-        regionCosts: regionCosts || [], 
+        regionCosts: regionCosts || [],
         userCosts: userCosts || [],
-        resourceCosts: resourceCosts || [], 
+        resourceCosts: resourceCosts || [],
         projectCosts: projectCosts || [],
-        recommendations: recommendations || [], 
+        recommendations: recommendations || [],
         costTrendData: costTrendData || [],
-        dailyCostData: dailyCostData || [], 
+        dailyCostData: dailyCostData || [],
         weeklyCostData: weeklyCostData || [],
         topSpendingResources,
         linkedAccountsSummary: linkedAccountsSummary || [],
-        carbonFootprint: carbonFootprint || [] // FIXED: Return it to the frontend
+        carbonFootprint: carbonFootprint || []
       },
       timestamp: new Date().toISOString()
     });
