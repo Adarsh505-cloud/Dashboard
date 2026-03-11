@@ -7,13 +7,13 @@ import { AuthProvider } from 'react-oidc-context';
 import type { User } from 'oidc-client-ts';
 
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: "641sh8j3j5iv62aot4ecnlpc3q", // <-- IMPORTANT: Replace with your actual client ID
-  redirect_uri: "https://cloudbillanalyzer.epiuse-aws.com", // <-- Your production URL
-  post_logout_redirect_uri: "https://cloudbillanalyzer.epiuse-aws.com",
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY || "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID || "641sh8j3j5iv62aot4ecnlpc3q",
+  redirect_uri: import.meta.env.VITE_REDIRECT_URI || "https://cloudbillanalyzer.epiuse-aws.com",
+  post_logout_redirect_uri: import.meta.env.VITE_REDIRECT_URI || "https://cloudbillanalyzer.epiuse-aws.com",
   response_type: "code",
   scope: "phone openid email",
-  automaticSilentRenew: true, // Keep the session alive automatically
+  automaticSilentRenew: true,
 };
 
 // This callback removes the auth params from the URL after login.

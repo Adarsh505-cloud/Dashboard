@@ -1,15 +1,14 @@
 import express from 'express';
 import { BedrockAgentRuntimeClient, InvokeAgentCommand } from "@aws-sdk/client-bedrock-agent-runtime";
-import { fromTemporaryCredentials } from "@aws-sdk/credential-providers"; 
+import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
+import { authenticateUser } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Define the Master Payer role ARN you created in Step 1
-const CROSS_ACCOUNT_ROLE_ARN = "arn:aws:iam::252078852689:role/CrossAccountBedrockAgentRole";
+const CROSS_ACCOUNT_ROLE_ARN = process.env.BEDROCK_CROSS_ACCOUNT_ROLE_ARN || "arn:aws:iam::252078852689:role/CrossAccountBedrockAgentRole";
 
-// Initialize the Bedrock Client by assuming the cross-account role
-const client = new BedrockAgentRuntimeClient({ 
-    region: "us-east-1", 
+const client = new BedrockAgentRuntimeClient({
+    region: process.env.BEDROCK_REGION || "us-east-1",
     credentials: fromTemporaryCredentials({
         params: {
             RoleArn: CROSS_ACCOUNT_ROLE_ARN,
@@ -19,7 +18,14 @@ const client = new BedrockAgentRuntimeClient({
     })
 });
 
-router.post('/', async (req, res) => {
+// Sanitize user prompt to prevent XML/instruction injection
+function sanitizePrompt(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  // Strip XML-like tags that could override system context
+  return raw.replace(/<\/?[a-zA-Z_][^>]*>/g, '').trim();
+}
+
+router.post('/', authenticateUser, async (req, res) => {
   try {
     const { accountId, prompt, sessionId, accountType } = req.body;
 
@@ -27,15 +33,22 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    // Pass live dates so the LLM doesn't hallucinate past years
+    // Validate accountId format if provided
+    if (accountId && !/^\d{12}$/.test(accountId)) {
+      return res.status(400).json({ error: 'Invalid account ID format' });
+    }
+
+    const sanitizedPrompt = sanitizePrompt(prompt);
+    if (!sanitizedPrompt) {
+      return res.status(400).json({ error: 'Prompt is empty after sanitization' });
+    }
+
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
 
-    // Automatically detect if we are querying the Master Payer account
     const isMaster = accountType === 'master' || accountId === '252078852689';
 
-    // Build a bulletproof XML-style prompt to force strict obedience from the LLM
     let contextualizedPrompt = `
 <system_context>
 Today's Date: ${todayStr}
@@ -47,13 +60,11 @@ Context Account ID: ${accountId}
 `;
 
     if (isMaster) {
-        // Master Payer routing logic
-        contextualizedPrompt += `1. THIS IS THE MASTER PAYER ORGANIZATION ACCOUNT. 
+        contextualizedPrompt += `1. THIS IS THE MASTER PAYER ORGANIZATION ACCOUNT.
 2. DO NOT filter queries with "WHERE line_item_usage_account_id = '${accountId}'" unless the user explicitly asks for the master account's isolated costs.
 3. To get a breakdown by linked account, simply GROUP BY "line_item_usage_account_id". NEVER invent or hallucinate tags for this.
 `;
     } else {
-        // Linked Account routing logic
         contextualizedPrompt += `1. THIS IS A SINGLE LINKED ACCOUNT.
 2. You MUST append "WHERE line_item_usage_account_id = '${accountId}'" to every single CUR query to restrict data to this specific account.
 `;
@@ -61,22 +72,21 @@ Context Account ID: ${accountId}
 
     contextualizedPrompt += `</critical_rules>
 
-USER QUERY: ${prompt}`;
+USER QUERY: ${sanitizedPrompt}`;
 
-    // FIXED: Appending Date.now() ensures Bedrock doesn't remember the old, broken system prompts 
-    // from your previous chats if the frontend isn't passing a unique sessionId.
-    const safeSessionId = sessionId || `session-${accountId}-${Date.now()}`;
+    // Use per-user session ID to prevent context leaking between users
+    const userId = req.user?.id || 'anonymous';
+    const safeSessionId = sessionId || `session-${userId}-${accountId}-${Date.now()}`;
 
     const command = new InvokeAgentCommand({
-      agentId: process.env.BEDROCK_AGENT_ID, 
-      agentAliasId: process.env.BEDROCK_AGENT_ALIAS_ID, 
+      agentId: process.env.BEDROCK_AGENT_ID,
+      agentAliasId: process.env.BEDROCK_AGENT_ALIAS_ID,
       sessionId: safeSessionId,
       inputText: contextualizedPrompt,
     });
 
     const response = await client.send(command);
 
-    // Bedrock Agent returns a stream of chunks, we need to decode and concatenate them
     let completion = "";
     for await (const chunkEvent of response.completion) {
       if (chunkEvent.chunk && chunkEvent.chunk.bytes) {
@@ -86,7 +96,7 @@ USER QUERY: ${prompt}`;
 
     res.json({ reply: completion });
   } catch (error) {
-    console.error('Error invoking Bedrock Agent:', error);
+    console.error('Error invoking Bedrock Agent:', error.message);
     res.status(500).json({ error: 'Failed to communicate with AI Assistant' });
   }
 });

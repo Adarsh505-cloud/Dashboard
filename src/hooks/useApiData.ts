@@ -74,8 +74,7 @@ export interface ApiData {
   topResources?: TopSpendingResource[];
   top_resources?: TopSpendingResource[];
   linkedAccountsSummary?: Array<{ accountId: string; accountName?: string; cost: number }>;
-  // FIXED: Added carbon footprint type
-  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>; 
+  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>;
 }
 
 interface UseApiDataResult {
@@ -151,9 +150,14 @@ export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult
     }
   };
 
+  // Use a stable key to avoid refetching when the object reference changes but values are the same
+  const credentialsKey = credentials
+    ? `${credentials.accountId}|${credentials.roleArn}|${credentials.accountType || ''}|${credentials.targetAccountId || ''}`
+    : '';
+
   useEffect(() => {
     fetchData();
-  }, [credentials]);
+  }, [credentialsKey]);
 
   return {
     data,
