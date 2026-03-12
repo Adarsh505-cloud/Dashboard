@@ -12,7 +12,9 @@ import {
   Loader,
   Users,
   Trash2,
-  Building2 // Added Building2 icon for Master indicator
+  Building2,
+  Menu,
+  X
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import ConnectAccountModal from './ConnectAccountModal';
@@ -39,6 +41,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
@@ -168,28 +171,40 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
     <>
       {isModalOpen && <ConnectAccountModal onClose={() => setIsModalOpen(false)} onConnect={handleConnectNewAccount} />}
       <div className="flex h-screen bg-gray-100 font-sans text-gray-800">
-        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm">
-          <div className="flex items-center gap-3 p-4 border-b h-16 shrink-0">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
-              <Cloud className="w-5 h-5 text-white" />
+        {/* Mobile sidebar overlay */}
+        {isSidebarOpen && (
+          <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+        )}
+        <aside className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm transition-transform duration-200 ease-in-out`}>
+          <div className="flex items-center justify-between p-4 border-b h-16 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                <Cloud className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold text-lg text-gray-800">Cost Analyzer</span>
             </div>
-            <span className="font-bold text-lg text-gray-800">Cost Analyzer</span>
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-1 rounded-lg hover:bg-gray-100">
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
           </div>
           <nav className="flex-1 p-4 space-y-1">
-            <SidebarButton text="Accounts" icon={Cloud} active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')} />
+            <SidebarButton text="Accounts" icon={Cloud} active={activeTab === 'accounts'} onClick={() => { setActiveTab('accounts'); setIsSidebarOpen(false); }} />
             {isAdmin && (
-              <SidebarButton text="User Management" icon={Users} active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+              <SidebarButton text="User Management" icon={Users} active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
             )}
             <div className="pt-4 mt-2 border-t">
                 <h3 className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Settings</h3>
-                <SidebarButton text="User Profile" icon={User} active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
-                <SidebarButton text="About" icon={Info} active={activeTab === 'about'} onClick={() => setActiveTab('about')} />
+                <SidebarButton text="User Profile" icon={User} active={activeTab === 'profile'} onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }} />
+                <SidebarButton text="About" icon={Info} active={activeTab === 'about'} onClick={() => { setActiveTab('about'); setIsSidebarOpen(false); }} />
             </div>
           </nav>
         </aside>
-        <div className="flex-1 flex flex-col">
-          <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between h-16 shrink-0">
-             <div>
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="bg-white border-b border-gray-200 px-3 sm:px-4 flex items-center justify-between h-16 shrink-0">
+             <div className="flex items-center gap-3">
+                <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 rounded-lg hover:bg-gray-100">
+                  <Menu className="w-5 h-5 text-gray-600" />
+                </button>
                 {backendStatus === 'connected' && <div className="w-3 h-3 bg-green-400 rounded-full" title="Backend Connected"></div>}
                 {backendStatus === 'disconnected' && <div className="w-3 h-3 bg-red-500 rounded-full" title="Backend Disconnected"></div>}
             </div>
@@ -210,7 +225,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-8 animate-in" key={activeTab}>
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 animate-in" key={activeTab}>
             {renderContent()}
           </main>
         </div>
@@ -230,15 +245,15 @@ const SidebarButton = ({ text, icon: Icon, active, onClick }: any) => (
 // FIXED: onGetDetails now includes the 3rd parameter, and we pass acc.accountType below
 const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAccount }: { accounts: Account[], isAdmin: boolean, onGetDetails: (id: string, arn: string, type?: 'standalone' | 'master') => void, onModalOpen: () => void, onRemoveAccount: (id: string) => void }) => (
     <div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg">
                 <Database className="w-7 h-7 opacity-50 mb-4"/>
                 <p className="text-sm">Total Onboarded Accounts</p>
                 <p className="text-3xl font-bold">{accounts.length}</p>
             </div>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Onboarded Accounts</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Onboarded Accounts</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {accounts.map(acc => (
                 <div key={acc.accountId} className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between transition-all hover:shadow-lg hover:-translate-y-1 relative overflow-hidden">
                     {/* Indicator for Master Accounts */}
@@ -295,9 +310,9 @@ const AccountsTab = ({ accounts, isAdmin, onGetDetails, onModalOpen, onRemoveAcc
 
 const ProfileTab = ({ onPasswordReset }: { onPasswordReset: () => void }) => (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900">User Profile</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">User Profile</h1>
       <p className="mt-2 text-gray-600">Manage your account and security settings.</p>
-      <div className="mt-8 bg-white p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
+      <div className="mt-6 sm:mt-8 bg-white p-4 sm:p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
           <h3 className="font-bold text-xl mb-6">Security Settings</h3>
           <div className="space-y-6">
             <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -321,9 +336,9 @@ const ProfileTab = ({ onPasswordReset }: { onPasswordReset: () => void }) => (
 
 const AboutTab = () => (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900">About</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">About</h1>
       <p className="mt-2 text-gray-600">Information about this application.</p>
-      <div className="mt-8 bg-white p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
+      <div className="mt-6 sm:mt-8 bg-white p-4 sm:p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
           <div className="mt-4">
               <p className="text-sm text-gray-700 font-mono">Version: 1.0.0</p>
           </div>

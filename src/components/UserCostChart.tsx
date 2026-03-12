@@ -295,17 +295,17 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+    <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 p-4 sm:p-6 lg:px-6 lg:py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500/20 rounded-lg">
-              <Users className="w-6 h-6 text-white" />
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">User Cost Analysis</h2>
-              <p className="text-indigo-200 text-sm">Cost distribution and resource ownership</p>
+              <h2 className="text-lg sm:text-xl lg:text-xl font-bold text-white">User Cost Analysis</h2>
+              <p className="text-indigo-200 text-xs sm:text-sm">Cost distribution and resource ownership</p>
             </div>
           </div>
           {/* The buttons have been removed from here */}
@@ -313,50 +313,50 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       </div>
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 border-b border-gray-200">
-        <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 border-b border-gray-200">
+        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <Users className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Users</div>
-              <div className="text-xl font-bold text-gray-900">{filteredData.length}</div>
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{filteredData.length}</div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <DollarSign className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Cost</div>
-              <div className="text-xl font-bold text-gray-900">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
                 ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <Server className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Resources</div>
-              <div className="text-xl font-bold text-gray-900">{totalResources}</div>
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{totalResources}</div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
+        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Avg Cost/User</div>
-              <div className="text-xl font-bold text-gray-900">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
                 ${avgCostPerUser.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
@@ -365,25 +365,25 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       </div>
       
       {/* Main Content */}
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Chart Section - Full Width */}
-        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Cost Distribution by User</h3>
+        <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Cost Distribution by User</h3>
             <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200">
               <TrendingUp className="w-4 h-4" />
               <span>Last 30 days</span>
             </div>
           </div>
-          <div className="h-96">
+          <div className="h-48 sm:h-64 md:h-80">
             <Bar data={chartData} options={options} />
           </div>
         </div>
         
         {/* User Details Section - Full Width */}
-        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">User Details</h3>
+        <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">User Details</h3>
             <div className="flex items-center gap-3">
               {/* Sort Controls */}
               <div className="flex items-center border border-gray-300 rounded-lg bg-white">
@@ -430,7 +430,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
           </div>
           
           {/* User List Container - One by One Format */}
-          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+          <div className="space-y-3 sm:space-y-4 max-h-[600px] overflow-y-auto pr-2">
             {sortedData.map((user, index) => {
               let safeResourcesList: string[] = [];
               if (user.resourcesList !== null && user.resourcesList !== undefined) {
@@ -477,7 +477,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold text-lg text-indigo-600">
+                        <div className="font-bold text-base sm:text-lg text-indigo-600">
                           ${user.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                         <div className="text-xs text-gray-500">{totalPercentage}% of total</div>
@@ -565,7 +565,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                       ) : (
                         <div className="text-center py-4 text-gray-500">
                           <div className="flex flex-col items-center gap-2">
-                            <Braces className="w-8 h-8 text-gray-400 mx-auto" />
+                            <Braces className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto" />
                             <span className="text-sm">Resource details not available</span>
                             <span className="text-xs">Expected: {user.resources} resources</span>
                           </div>
@@ -583,16 +583,16 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       {/* Resources Modal/Panel */}
       {viewingResourcesFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4 rounded-t-xl">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-3 sm:px-6 sm:py-4 rounded-t-xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-500/20 rounded-lg">
                     <Server className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">Resources for {viewingResourcesFor}</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-white">Resources for {viewingResourcesFor}</h3>
                     <p className="text-indigo-200 text-sm">
                       {getCurrentUser()?.resources} resources • ${getCurrentUser()?.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total cost
                     </p>
@@ -636,7 +636,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
               
               {/* Resources Table */}
               <div className="flex-1 overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <div className="overflow-x-auto">
+                <table className="min-w-[600px] w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -698,8 +699,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                       <tr>
                         <td colSpan={3} className="px-6 py-12 text-center">
                           <div className="flex flex-col items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                              <Search className="w-6 h-6 text-gray-400" />
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                              <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
                             </div>
                             <div className="text-gray-500">
                               {resourceSearchTerm ? 'No resources match your search' : 
@@ -721,11 +722,12 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                     )}
                   </tbody>
                 </table>
+                </div>
               </div>
               
               {/* Footer */}
-              <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 rounded-b-xl">
-                <div className="flex justify-between items-center text-sm text-gray-500">
+              <div className="border-t border-gray-200 px-4 py-3 sm:px-6 bg-gray-50 rounded-b-xl">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
                   <div>
                     Showing {filteredResources.length} of {getCurrentUser()?.resourcesList.length || 0} resources
                   </div>

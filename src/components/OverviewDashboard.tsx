@@ -243,88 +243,88 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {/* Total Cost */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-blue-100">
               {trendInfo.percentage >= 0 ? (
-                <TrendingUp className="w-4 h-4" />
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
               ) : (
-                <TrendingDown className="w-4 h-4" />
+                <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
               )}
-              <span className="text-sm">
+              <span className="text-xs sm:text-sm">
                 {trendInfo.percentage >= 0 ? '+' : ''}{trendInfo.percentage.toFixed(1)}%
               </span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${data.totalMonthlyCost.toLocaleString()}</div>
-          <div className="text-blue-100 text-sm">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">${data.totalMonthlyCost.toLocaleString()}</div>
+          <div className="text-blue-100 text-xs sm:text-sm">
             {monthInfo.monthName} (Day {monthInfo.currentDay}/{monthInfo.daysInMonth})
           </div>
-          <div className="text-blue-200 text-xs mt-1">
+          <div className="text-blue-200 text-[10px] sm:text-xs mt-1 hidden sm:block">
             {trendInfo.comparison} • {monthInfo.monthProgress}% through month
           </div>
         </div>
 
         {/* Potential Savings */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <TrendingDown className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <TrendingDown className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-green-100">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm">{highPriorityRecommendations} high</span>
+              <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">{highPriorityRecommendations} high</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${totalPotentialSavings.toLocaleString()}</div>
-          <div className="text-green-100">Potential Savings</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">${totalPotentialSavings.toLocaleString()}</div>
+          <div className="text-green-100 text-xs sm:text-sm">Potential Savings</div>
         </div>
 
         {/* Active Resources */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <Server className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <Server className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-purple-100">
-              <Activity className="w-4 h-4" />
-              <span className="text-sm">Active</span>
+              <Activity className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">Active</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{totalResources.toLocaleString()}</div>
-          <div className="text-purple-100">Resources</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">{totalResources.toLocaleString()}</div>
+          <div className="text-purple-100 text-xs sm:text-sm">Resources</div>
         </div>
 
         {/* Active Projects */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <FolderOpen className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <FolderOpen className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-orange-100">
-              <Users className="w-4 h-4" />
-              <span className="text-sm">{data.userCosts.length} users</span>
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">{data.userCosts.length} users</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{totalProjects}</div>
-          <div className="text-orange-100">Projects</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">{totalProjects}</div>
+          <div className="text-orange-100 text-xs sm:text-sm">Projects</div>
         </div>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
         {/* MODIFIED: Cost Trend Chart */}
-        <div className="xl:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="lg:col-span-2 bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Cost Trend (Last 30 Days)</h3>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Cost Trend (Last 30 Days)</h3>
               <p className="text-gray-500">
               </p>
             </div>
@@ -332,7 +332,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
               <BarChart3 className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-48 sm:h-56 lg:h-64">
             <Line data={trendData} options={lineChartOptions} />
           </div>
           <div className="mt-4 flex items-center justify-between text-sm">
@@ -352,10 +352,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
 
 
         {/* Top Services */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Top Services</h3>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Top Services</h3>
               <p className="text-gray-500"> </p>
             </div>
             <div className="p-2 bg-green-100 rounded-lg">
@@ -387,12 +387,12 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
       </div>
 
       {/* Detailed Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
         {/* Regional Distribution */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Regional Distribution</h3>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Regional Distribution</h3>
               <p className="text-gray-500">
                 {monthInfo.monthName} costs by AWS region (through day {monthInfo.currentDay})
               </p>
@@ -441,10 +441,10 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
         </div>
 
         {/* Quick Insights */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Quick Insights</h3>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Quick Insights</h3>
               <p className="text-gray-500">Key findings and recommendations</p>
             </div>
             <div className="p-2 bg-yellow-100 rounded-lg">

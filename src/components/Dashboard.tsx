@@ -275,41 +275,41 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     undefined;
 
   return (
-    <div className="min-h-screen p-4 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={handleBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
-              Back
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Back</span>
             </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
                 {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600 truncate">
                 Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
                 {isMasterView && ' (Master Payer)'}
               </p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4 flex-wrap">
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
             <DateRangeSelector dateRange={dateRange} onDateRangeChange={setDateRange} />
 
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 text-sm sm:text-base"
             >
               {isExporting ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
+                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
               ) : (
-                <Download className="w-5 h-5" />
+                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
               {isExporting ? 'Generating...' : 'Export PDF'}
             </button>
@@ -328,46 +328,46 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
           /* Render the standard Standalone / Drill-Down Dashboard */
           <>
             {/* Total Cost Card */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 mb-8 text-white shadow-2xl">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-white/20 rounded-2xl">
-                  <DollarSign className="w-8 h-8" />
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 text-white shadow-2xl">
+              <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                <div className="p-2 sm:p-3 bg-white/20 rounded-xl sm:rounded-2xl">
+                  <DollarSign className="w-6 h-6 sm:w-8 sm:h-8" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold">Total Monthly Cost</h2>
-                  <p className="text-blue-100">
+                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold">Total Monthly Cost</h2>
+                  <p className="text-blue-100 text-xs sm:text-sm">
                     {dateRange.startDate === dateRange.endDate
                       ? new Date(dateRange.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                       : `${new Date(dateRange.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(dateRange.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                   </p>
                 </div>
               </div>
-              <div className="text-5xl font-bold mb-2">
+              <div className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-2">
                 ${data.totalMonthlyCost?.toLocaleString?.() ?? 0}
               </div>
-              <div className="flex items-center gap-2 text-blue-100">
-                <TrendingUp className="w-5 h-5" />
+              <div className="flex items-center gap-2 text-blue-100 text-xs sm:text-sm">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span>Real-time data from AWS CUR Data</span>
               </div>
             </div>
 
             {/* Navigation Tabs */}
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8 overflow-hidden">
-              <div className="flex overflow-x-auto">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 mb-4 sm:mb-6 lg:mb-8 overflow-hidden">
+              <div className="flex overflow-x-auto scrollbar-hide">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
                       key={tab.key}
                       onClick={() => setActiveTab(tab.key)}
-                      className={`flex items-center gap-3 px-6 py-4 whitespace-nowrap transition-all duration-200 border-b-2 ${
+                      className={`flex items-center gap-1.5 sm:gap-3 px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap transition-all duration-200 border-b-2 ${
                         activeTab === tab.key
                           ? 'border-blue-500 text-blue-600 bg-blue-50'
                           : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                       }`}
                     >
-                      <Icon className="w-5 h-5" />
-                      <span className="font-medium">{tab.label}</span>
+                      <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <span className="font-medium text-xs sm:text-sm md:text-base">{tab.label}</span>
                     </button>
                   );
                 })}
@@ -375,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </div>
 
             {/* Dashboard Content */}
-            <div ref={dashboardRef} className="space-y-8">
+            <div ref={dashboardRef} className="space-y-4 sm:space-y-6 lg:space-y-8">
               {activeTab === 'overview' && <OverviewDashboard data={data} isExporting={isExporting} />}
               {/* FIXED: Passing activeCredentials instead of credentials so the backend knows which account we are drilling down into */}
               {activeTab === 'services' && <CostChart data={data.serviceCosts} credentials={activeCredentials} isExporting={isExporting} />}
