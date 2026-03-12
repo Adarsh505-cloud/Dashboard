@@ -253,23 +253,23 @@ const ProjectChart: React.FC<ProjectChartProps> = ({ data, isExporting }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-4 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500/20 rounded-lg"><FolderOpen className="w-6 h-6 text-white" /></div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-2 bg-blue-500/20 rounded-lg"><FolderOpen className="w-5 h-5 sm:w-6 sm:h-6 text-white" /></div>
             <div>
-              <h2 className="text-xl font-bold text-white">Project Cost Analysis</h2>
-              <p className="text-blue-200 text-sm">Cost distribution and resource ownership</p>
+              <h2 className="text-base sm:text-lg lg:text-xl font-bold text-white">Project Cost Analysis</h2>
+              <p className="text-blue-200 text-xs sm:text-sm hidden sm:block">Cost distribution and resource ownership</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><RefreshCw className="w-5 h-5" /></button>
-            <button className="p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><Settings className="w-5 h-5" /></button>
-            <button className="p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><Download className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button className="p-1.5 sm:p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            <button className="p-1.5 sm:p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors hidden sm:block"><Settings className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            <button className="p-1.5 sm:p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><Download className="w-4 h-4 sm:w-5 sm:h-5" /></button>
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 border-b border-gray-200">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 p-4 sm:p-6 border-b border-gray-200">
         <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
           <div className="flex items-center gap-3"><div className="p-2 bg-blue-100 rounded-lg"><FolderOpen className="w-5 h-5 text-blue-600" /></div>
             <div>
@@ -303,21 +303,21 @@ const ProjectChart: React.FC<ProjectChartProps> = ({ data, isExporting }) => {
           </div>
         </div>
       </div>
-      <div className="p-6 space-y-6">
-        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Cost Distribution by Project</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200">
-              <AlertCircle className="w-4 h-4" />
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border border-gray-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Cost Distribution by Project</h3>
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-gray-200">
+              <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>UNMAPPED → Others</span>
             </div>
           </div>
-          <div className="h-96"><Bar data={chartData} options={options} /></div>
+          <div className="h-56 sm:h-72 lg:h-96"><Bar data={chartData} options={options} /></div>
         </div>
-        <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Project Details</h3>
-            <div className="flex items-center gap-3">
+        <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border border-gray-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Project Details</h3>
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center border border-gray-300 rounded-lg bg-white">
                 <button onClick={() => setSortOrder('high-to-low')} className={`px-3 py-1.5 flex items-center gap-1 text-sm rounded-l-lg ${sortOrder === 'high-to-low' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                   <span>High to Low</span><ArrowDown className="w-4 h-4" />
@@ -413,15 +413,15 @@ const ProjectChart: React.FC<ProjectChartProps> = ({ data, isExporting }) => {
         </div>
       </div>
       {viewingResourcesFor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 rounded-t-xl">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/20 rounded-lg"><Server className="w-5 h-5 text-white" /></div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white">Resources for {viewingResourcesFor}</h3>
-                    <p className="text-blue-200 text-sm">{getCurrentProject()?.resources} resources • ${(getCurrentProject()?.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total cost</p>
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="p-2 bg-blue-500/20 rounded-lg shrink-0"><Server className="w-4 h-4 sm:w-5 sm:h-5 text-white" /></div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm sm:text-lg font-bold text-white truncate">Resources: {viewingResourcesFor}</h3>
+                    <p className="text-blue-200 text-xs sm:text-sm">{getCurrentProject()?.resources} resources • ${(getCurrentProject()?.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
                 <button onClick={() => setViewingResourcesFor(null)} className="p-2 text-blue-200 hover:text-white hover:bg-blue-500/20 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
@@ -439,8 +439,8 @@ const ProjectChart: React.FC<ProjectChartProps> = ({ data, isExporting }) => {
                   </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+              <div className="flex-1 overflow-x-auto overflow-y-auto">
+                <table className="min-w-[500px] w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resource ID</th>

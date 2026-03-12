@@ -136,80 +136,80 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
       {/* ── KPI Hero Row ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {/* Total Cost */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div className="flex items-center gap-1 text-blue-100 bg-white/20 px-2 py-1 rounded-full text-xs font-bold tracking-wide">
+            <div className="hidden sm:flex items-center gap-1 text-blue-100 bg-white/20 px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold tracking-wide">
               CONSOLIDATED
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${totalCost.toLocaleString("en-US", { minimumFractionDigits: 2 })}</div>
-          <div className="text-blue-100 text-sm">Total Org Cost</div>
-          <div className="text-blue-200 text-xs mt-1">Current billing period</div>
+          <div className="text-lg sm:text-2xl lg:text-3xl font-bold mb-1">${totalCost.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="text-blue-100 text-xs sm:text-sm">Total Org Cost</div>
+          <div className="text-blue-200 text-[10px] sm:text-xs mt-1 hidden sm:block">Current billing period</div>
         </div>
 
         {/* Linked Accounts */}
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <Building2 className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <Building2 className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div className="flex items-center gap-1 text-emerald-100 bg-white/20 px-2 py-1 rounded-full text-xs font-bold tracking-wide">
+            <div className="hidden sm:flex items-center gap-1 text-emerald-100 bg-white/20 px-2 py-1 rounded-full text-[10px] sm:text-xs font-bold tracking-wide">
               ACTIVE
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{ACCOUNTS.length}</div>
-          <div className="text-emerald-100 text-sm">Linked Accounts</div>
-          <div className="text-emerald-200 text-xs mt-1">Active member accounts</div>
+          <div className="text-lg sm:text-2xl lg:text-3xl font-bold mb-1">{ACCOUNTS.length}</div>
+          <div className="text-emerald-100 text-xs sm:text-sm">Linked Accounts</div>
+          <div className="text-emerald-200 text-[10px] sm:text-xs mt-1 hidden sm:block">Active member accounts</div>
         </div>
 
         {/* Top Account Spend */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <TrendingUp className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div className="flex items-center gap-1 text-orange-100 bg-white/20 px-2 py-1 rounded-full text-xs font-bold tracking-wide">
+            <div className="flex items-center gap-1 text-orange-100 bg-white/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold tracking-wide">
               {topAcc.pct.toFixed(1)}%
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${topAcc.cost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          <div className="text-orange-100 text-sm truncate">Top Account Spend</div>
-          <div className="text-orange-200 text-xs mt-1 truncate">{topAcc.name} · {topAcc.id.slice(-4)}</div>
+          <div className="text-lg sm:text-2xl lg:text-3xl font-bold mb-1">${topAcc.cost.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="text-orange-100 text-xs sm:text-sm truncate">Top Spend</div>
+          <div className="text-orange-200 text-[10px] sm:text-xs mt-1 truncate">{topAcc.name}</div>
         </div>
 
         {/* Potential Savings */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <AlertTriangle className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
-            <div className="flex items-center gap-1 text-purple-100 bg-white/20 px-2 py-1 rounded-full text-xs font-bold tracking-wide">
+            <div className="flex items-center gap-1 text-purple-100 bg-white/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold tracking-wide">
               {recommendations.length} ALERTS
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${totalSavings.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-          <div className="text-purple-100 text-sm">Potential Savings</div>
-          <div className="text-purple-200 text-xs mt-1">Optimization alerts across org</div>
+          <div className="text-lg sm:text-2xl lg:text-3xl font-bold mb-1">${totalSavings.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+          <div className="text-purple-100 text-xs sm:text-sm">Potential Savings</div>
+          <div className="text-purple-200 text-[10px] sm:text-xs mt-1 hidden sm:block">Optimization alerts across org</div>
         </div>
       </div>
 
       {/* ── Cost Trend Chart ── */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg shrink-0">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Daily Cost Trend</h3>
-              <p className="text-sm text-gray-500">Last 30 days · Consolidated Organization Total</p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Daily Cost Trend</h3>
+              <p className="text-xs sm:text-sm text-gray-500">Last 30 days · Consolidated Total</p>
             </div>
           </div>
           <button 
@@ -225,7 +225,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
           </button>
         </div>
 
-        <div className="h-72 w-full">
+        <div className="h-48 sm:h-60 lg:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={DAILY_DATA} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -247,17 +247,17 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
       </div>
 
       {/* ── Bottom Grid: Donut + Accounts ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+
         {/* Donut */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 flex flex-col">
-          <div className="flex items-center gap-3 mb-6">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 flex flex-col md:col-span-1">
+          <div className="flex items-center gap-3 mb-4 sm:mb-6">
             <div className="p-2 bg-emerald-100 rounded-lg shrink-0">
-              <PieChartIcon className="w-5 h-5 text-emerald-600" />
+              <PieChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Cost by Account</h3>
-              <p className="text-sm text-gray-500">Proportional distribution</p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Cost by Account</h3>
+              <p className="text-xs sm:text-sm text-gray-500">Proportional distribution</p>
             </div>
           </div>
           
@@ -305,31 +305,31 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
         </div>
 
         {/* Member Accounts Table (With Trend Column Restored) */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 flex flex-col lg:col-span-2">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 flex flex-col md:col-span-1 lg:col-span-2">
+          <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-100 rounded-lg shrink-0">
-                <Building2 className="w-5 h-5 text-indigo-600" />
+                <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">Member Accounts</h3>
-                <p className="text-sm text-gray-500">All linked accounts for this billing period</p>
+                <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Member Accounts</h3>
+                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">All linked accounts for this billing period</p>
               </div>
             </div>
-            <span className="bg-indigo-50 text-indigo-700 py-1 px-3 rounded-full text-xs font-bold tracking-wide">
+            <span className="bg-indigo-50 text-indigo-700 py-1 px-2 sm:px-3 rounded-full text-[10px] sm:text-xs font-bold tracking-wide">
               {ACCOUNTS.length} ACTIVE
             </span>
           </div>
 
-          <div className="flex-1 overflow-auto max-h-[400px]">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
+          <div className="flex-1 overflow-x-auto max-h-[400px]">
+            <table className="w-full text-left border-collapse whitespace-nowrap min-w-[600px]">
               <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
                 <tr>
-                  <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Account</th>
-                  <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Cost</th>
-                  <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Share</th>
-                  <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Trend</th>
-                  <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Action</th>
+                  <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Account</th>
+                  <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Cost</th>
+                  <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Share</th>
+                  <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Trend</th>
+                  <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -367,7 +367,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
                         onClick={() => onDrillDown(a.id)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
                       >
-                        Details <ArrowRight className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Details</span> <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -379,19 +379,19 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
       </div>
 
       {/* ── Top Resources ── */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 flex flex-col">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 flex flex-col">
+        <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-100 rounded-lg shrink-0">
-              <Server className="w-5 h-5 text-orange-600" />
+              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Top Organization Resources</h3>
-              <p className="text-sm text-gray-500">Highest spending resources across all member accounts</p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Top Resources</h3>
+              <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">Highest spending resources across all accounts</p>
             </div>
           </div>
-          <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
-            <span className="text-xs text-gray-500 font-semibold mr-2">TOTAL FOR TOP 10:</span>
+          <div className="bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-100">
+            <span className="text-[10px] sm:text-xs text-gray-500 font-semibold mr-1 sm:mr-2">TOP 10:</span>
             <span className="text-sm font-bold text-gray-900 font-mono">
               ${RESOURCES.reduce((s: number, r: any) => s + r.cost, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
@@ -399,14 +399,14 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse whitespace-nowrap">
+          <table className="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
             <thead className="bg-gray-50">
               <tr>
-                <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
-                <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Service</th>
-                <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Account</th>
-                <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Resource ID</th>
-                <th className="py-3 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Total Cost</th>
+                <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
+                <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Service</th>
+                <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Account</th>
+                <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Resource ID</th>
+                <th className="py-3 px-3 sm:px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Total Cost</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

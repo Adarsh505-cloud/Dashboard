@@ -229,30 +229,30 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
   const toggleGroup = (group: string) => setCollapsedGroups((s) => ({ ...s, [group]: !s[group] }));
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow">
-            <div className="text-sm">Potential Monthly Savings</div>
-            <div className="text-xl font-semibold">{formatCurrency(totalSavings)}</div>
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow">
+            <div className="text-xs sm:text-sm">Potential Monthly Savings</div>
+            <div className="text-lg sm:text-xl font-semibold">{formatCurrency(totalSavings)}</div>
           </div>
-          <div className="flex items-center gap-2 bg-white border rounded-lg px-3 py-2 shadow-sm">
-            <span className="text-sm font-medium text-gray-700 mr-2">Priority</span>
+          <div className="flex items-center gap-1 sm:gap-2 bg-white border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm overflow-x-auto">
+            <span className="text-xs sm:text-sm font-medium text-gray-700 mr-1 sm:mr-2 shrink-0">Priority</span>
             {(["all", "high", "medium", "low"] as const).map((p) => (
-              <button key={p} onClick={() => setPriorityFilter(p)} className={`px-3 py-1 rounded-md text-sm ${priorityFilter === p ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`} aria-pressed={priorityFilter === p}>
+              <button key={p} onClick={() => setPriorityFilter(p)} className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm shrink-0 ${priorityFilter === p ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`} aria-pressed={priorityFilter === p}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
           </div>
         </div>
-        <div className="text-sm text-gray-600">Showing <strong>{filtered.length}</strong> of <strong>{items.length}</strong> recommendations</div>
+        <div className="text-xs sm:text-sm text-gray-600">Showing <strong>{filtered.length}</strong> of <strong>{items.length}</strong> recommendations</div>
       </div>
       {(["Compute Optimizer", "Billing & Cost Management", "Other"] as const).map((groupName) => {
         const list = grouped[groupName] || [];
         const collapsed = !!collapsedGroups[groupName];
         return (
-          <section key={groupName} className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
-            <div className="p-4 flex items-center justify-between border-b">
+          <section key={groupName} className="bg-white rounded-xl sm:rounded-2xl shadow border border-gray-100 overflow-hidden">
+            <div className="p-3 sm:p-4 flex items-center justify-between border-b">
               <div className="flex items-center gap-3">
                 <button onClick={() => toggleGroup(groupName)} aria-expanded={!collapsed} className="p-1 rounded hover:bg-gray-50">
                   {collapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronDown className="w-5 h-5 text-gray-600" />}
@@ -278,14 +278,14 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
                       const ebsUpgrade = parsed ? detectEbsUpgrade(parsed) : null;
                       const showUpgradeMessage = ebsUpgrade?.recommended;
                       return (
-                        <div key={rec.id} className="p-6 flex gap-4 items-start hover:bg-gray-50 transition-colors">
-                          <div className="flex-shrink-0 mt-1"><div className="w-10 h-10 rounded-lg bg-gray-50 border flex items-center justify-center">{getTypeIcon(rec.type)}</div></div>
+                        <div key={rec.id} className="p-3 sm:p-4 lg:p-6 flex gap-3 sm:gap-4 items-start hover:bg-gray-50 transition-colors">
+                          <div className="flex-shrink-0 mt-1 hidden sm:block"><div className="w-10 h-10 rounded-lg bg-gray-50 border flex items-center justify-center">{getTypeIcon(rec.type)}</div></div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-3">
-                                  <h4 className="text-base font-semibold text-gray-900 truncate">{title}</h4>
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${getSeverityClass(rec.severity)}`}>{(rec.severity || "low").toUpperCase()}</span>
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                              <div className="min-w-0 w-full sm:w-auto">
+                                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-none">{title}</h4>
+                                  <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded ${getSeverityClass(rec.severity)}`}>{(rec.severity || "low").toUpperCase()}</span>
                                 </div>
                                 <div className="text-sm text-gray-600 mt-2 max-w-3xl">
                                   {showUpgradeMessage ? <div className="text-sm text-gray-700"><strong>Recommendation:</strong> {ebsUpgrade.message}</div> : (isExpanded ? summary : (typeof summary === "string" ? `${summary.slice(0, 340)}${summary.length > 340 ? '...' : ''}` : summary))}
@@ -303,8 +303,8 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
                                 </div>
                                 <div className="text-xs text-gray-400 mt-3">Last refreshed: {formatDate(rec.lastActivity)}</div>
                               </div>
-                              <div className="flex-shrink-0 text-right">
-                                <div className="text-green-600 font-semibold text-xl">{formatCurrency(savings)}</div>
+                              <div className="flex-shrink-0 text-left sm:text-right">
+                                <div className="text-green-600 font-semibold text-base sm:text-xl">{formatCurrency(savings)}</div>
                                 {cost > 0 && <div className="text-xs text-gray-500">of {formatCurrency(cost)} cost</div>}
                                 {cost > 0 && <div className="mt-3 w-40 bg-gray-100 rounded-full h-2 overflow-hidden"><div className="h-2 bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (savings / cost) * 100)}%` }} /></div>}
                                 <div className="mt-4 flex flex-col gap-2 items-end">
@@ -327,8 +327,8 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
         );
       })}
       {modalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl shadow-xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div className="bg-white rounded-t-xl sm:rounded-xl w-full sm:max-w-3xl shadow-xl overflow-hidden max-h-[90vh]">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="font-semibold text-lg text-gray-900">Details — {modalItem.resource ?? modalItem.id}</h3>
               <button onClick={() => setModalItem(null)} className="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200">Close</button>

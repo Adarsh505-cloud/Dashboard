@@ -178,51 +178,51 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
   return (
     <div className="space-y-8">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 text-white">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="p-3 bg-white/20 rounded-2xl">
-            <Server className="w-8 h-8" />
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl lg:rounded-3xl p-4 sm:p-6 lg:p-8 text-white">
+        <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+          <div className="p-2 sm:p-3 bg-white/20 rounded-xl sm:rounded-2xl">
+            <Server className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
           <div>
-            <h2 className="text-3xl font-bold">Service Cost Analysis</h2>
-            <p className="text-blue-100">Detailed breakdown of AWS service costs across regions</p>
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Service Cost Analysis</h2>
+            <p className="text-blue-100 text-xs sm:text-sm">Breakdown of AWS service costs across regions</p>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-          <div className="bg-white/10 rounded-xl p-4">
-            <div className="text-2xl font-bold">{filteredServices.length}</div>
-            <div className="text-blue-100">Active Services</div>
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mt-4 sm:mt-6">
+          <div className="bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
+            <div className="text-lg sm:text-2xl font-bold">{filteredServices.length}</div>
+            <div className="text-blue-100 text-xs sm:text-sm">Services</div>
           </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <div className="text-2xl font-bold">${totalCost.toLocaleString()}</div>
-            <div className="text-blue-100">Total Cost</div>
+          <div className="bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
+            <div className="text-lg sm:text-2xl font-bold">${totalCost.toLocaleString()}</div>
+            <div className="text-blue-100 text-xs sm:text-sm">Total Cost</div>
           </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <div className="text-2xl font-bold">{new Set(data.map(d => d.region)).size}</div>
-            <div className="text-blue-100">Regions</div>
+          <div className="bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
+            <div className="text-lg sm:text-2xl font-bold">{new Set(data.map(d => d.region)).size}</div>
+            <div className="text-blue-100 text-xs sm:text-sm">Regions</div>
           </div>
         </div>
       </div>
 
       {/* Top 10 Services Chart */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-yellow-100 rounded-lg">
-              <Award className="w-6 h-6 text-yellow-600" />
+              <Award className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Top 10 Cost-Generating Services</h3>
-              <p className="text-gray-500">Highest spending services in your AWS account</p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Top 10 Services</h3>
+              <p className="text-gray-500 text-xs sm:text-sm hidden sm:block">Highest spending services in your AWS account</p>
             </div>
           </div>
           <div className="p-2 bg-blue-100 rounded-lg">
-            <BarChart3 className="w-5 h-5 text-blue-600" />
+            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
           </div>
         </div>
-        
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <div className="h-80">
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+          <div className="h-56 sm:h-64 lg:h-80">
             <Doughnut data={chartData} options={chartOptions} />
           </div>
           
@@ -264,11 +264,11 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-6">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between mb-4 sm:mb-6">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">All Services Breakdown</h3>
-            <p className="text-gray-500">Detailed view with regional distribution</p>
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">All Services Breakdown</h3>
+            <p className="text-gray-500 text-xs sm:text-sm">Detailed view with regional distribution</p>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
@@ -305,54 +305,54 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
             return (
               <div key={service.service} className="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
                 {/* Service Header */}
-                <div className="p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="p-3 sm:p-4 lg:p-6 bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                       <button
                         onClick={() => toggleServiceExpansion(service.service)}
-                        className="p-2 hover:bg-white rounded-lg transition-colors"
+                        className="p-1 sm:p-2 hover:bg-white rounded-lg transition-colors shrink-0"
                       >
                         {service.isExpanded ? (
-                          <ChevronDown className="w-5 h-5 text-gray-600" />
+                          <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                         ) : (
-                          <ChevronRight className="w-5 h-5 text-gray-600" />
+                          <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                         )}
                       </button>
-                      
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-4 h-4 rounded-full"
+
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div
+                          className="w-3 h-3 sm:w-4 sm:h-4 rounded-full shrink-0"
                           style={{ backgroundColor: colors[index % colors.length] }}
                         />
-                        <div>
-                          <h4 className="text-lg font-semibold text-gray-900">
+                        <div className="min-w-0">
+                          <h4 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 truncate">
                             {service.service}
                           </h4>
-                          <p className="text-sm text-gray-500">
-                            {service.regions.length} region{service.regions.length > 1 ? 's' : ''} • 
-                            {percentage.toFixed(1)}% of total cost
+                          <p className="text-xs sm:text-sm text-gray-500">
+                            {service.regions.length} region{service.regions.length > 1 ? 's' : ''} •
+                            {percentage.toFixed(1)}%
                           </p>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-4">
+
+                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900">
                           ${service.totalCost.toLocaleString()}
                         </div>
                         <div className="flex items-center gap-1 text-green-600">
-                          <TrendingUp className="w-4 h-4" />
-                          <span className="text-sm">+5.2%</span>
+                          <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="text-xs sm:text-sm">+5.2%</span>
                         </div>
                       </div>
-                      
+
                       <button
                         onClick={() => handleServiceClick(service.service)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                       >
                         <Eye className="w-4 h-4" />
-                        View Resources
+                        <span className="hidden md:inline">View Resources</span>
                       </button>
                     </div>
                   </div>
