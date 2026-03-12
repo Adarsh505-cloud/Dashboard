@@ -152,7 +152,7 @@ export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult
 
   // Use a stable key to avoid refetching when the object reference changes but values are the same
   const credentialsKey = credentials
-    ? `${credentials.accountId}|${credentials.roleArn}|${credentials.accountType || ''}|${credentials.targetAccountId || ''}`
+    ? `${credentials.accountId}|${credentials.roleArn}|${credentials.accountType || ''}|${credentials.targetAccountId || ''}|${credentials.startDate || ''}|${credentials.endDate || ''}`
     : '';
 
   useEffect(() => {

@@ -14,11 +14,19 @@ const roleArnField = Joi.string()
     'any.required': 'Role ARN is required'
   });
 
+const dateField = Joi.string()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+  .messages({
+    'string.pattern.base': 'Date must be in YYYY-MM-DD format',
+  });
+
 const credentialsSchema = Joi.object({
   accountId: accountIdField.required(),
   roleArn: roleArnField.required(),
   targetAccountId: accountIdField.optional().allow(null, ''),
   accountType: Joi.string().valid('standalone', 'master').optional(),
+  startDate: dateField.optional().allow(null, ''),
+  endDate: dateField.optional().allow(null, ''),
 });
 
 const resourceRequestSchema = Joi.object({
