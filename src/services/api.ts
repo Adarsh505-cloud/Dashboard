@@ -25,6 +25,8 @@ export interface ApiCredentials {
   roleArn: string;
   accountType?: 'standalone' | 'master';
   targetAccountId?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ApiResponse<T> {

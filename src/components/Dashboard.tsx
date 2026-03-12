@@ -27,6 +27,7 @@ import MasterOverviewDashboard from './MasterOverviewDashboard';
 import { exportToPDF } from '../utils/pdfExport';
 import { useApiData } from '../hooks/useApiData';
 import ChatbotWidget from './ChatbotWidget';
+import DateRangeSelector, { DateRange, getDefaultDateRange } from './DateRangeSelector';
 
 interface DashboardProps {
   credentials: {
@@ -41,14 +42,17 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isExporting, setIsExporting] = useState(false);
   const [targetAccountId, setTargetAccountId] = useState<string | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange);
   
   const dashboardRef = useRef<HTMLDivElement>(null);
 
   // Combine parent credentials with local drill-down target
   const activeCredentials = useMemo(() => ({
     ...credentials,
-    targetAccountId
-  }), [credentials.accountId, credentials.roleArn, credentials.accountType, targetAccountId]);
+    targetAccountId,
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+  }), [credentials.accountId, credentials.roleArn, credentials.accountType, targetAccountId, dateRange.startDate, dateRange.endDate]);
 
   const { data, loading, error, retry } = useApiData(activeCredentials);
 
@@ -294,17 +298,9 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Calendar className="w-4 h-4" />
-                Last updated
-              </div>
-              <div className="text-sm font-medium text-gray-900">
-                {getCurrentDateTime()} IST
-              </div>
-            </div>
-            
+          <div className="flex items-center gap-4 flex-wrap">
+            <DateRangeSelector dateRange={dateRange} onDateRangeChange={setDateRange} />
+
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
@@ -339,7 +335,11 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Total Monthly Cost</h2>
-                  <p className="text-blue-100">Current billing period</p>
+                  <p className="text-blue-100">
+                    {dateRange.startDate === dateRange.endDate
+                      ? new Date(dateRange.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : `${new Date(dateRange.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${new Date(dateRange.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                  </p>
                 </div>
               </div>
               <div className="text-5xl font-bold mb-2">

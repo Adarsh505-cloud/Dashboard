@@ -9,9 +9,9 @@ const lambdaClient = new LambdaClient({});
 
 router.post('/analysis', validateCredentials, async (req, res, next) => {
   try {
-    const { accountId, roleArn, targetAccountId, accountType } = req.body;
+    const { accountId, roleArn, targetAccountId, accountType, startDate, endDate } = req.body;
 
-    const costService = new CostService(accountId, roleArn, targetAccountId);
+    const costService = new CostService(accountId, roleArn, targetAccountId, { startDate, endDate });
     const recommendationService = new RecommendationService(accountId, roleArn, targetAccountId);
 
     const results = await Promise.all([
