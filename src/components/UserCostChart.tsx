@@ -295,7 +295,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 p-4 sm:p-6 lg:px-6 lg:py-4">
         <div className="flex items-center justify-between">
@@ -313,50 +313,50 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       </div>
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 border-b border-gray-200">
-        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 p-3 sm:p-4 lg:p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-indigo-50 dark:bg-indigo-950 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <Users className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Users</div>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{filteredData.length}</div>
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">{filteredData.length}</div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
+        <div className="bg-indigo-50 dark:bg-indigo-950 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <DollarSign className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Cost</div>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">
                 ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
+        <div className="bg-indigo-50 dark:bg-indigo-950 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <Server className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Total Resources</div>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{totalResources}</div>
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">{totalResources}</div>
             </div>
           </div>
         </div>
-        <div className="bg-indigo-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100">
+        <div className="bg-indigo-50 dark:bg-indigo-950 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-100 rounded-lg">
               <TrendingUp className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <div className="text-sm text-indigo-600 font-medium">Avg Cost/User</div>
-              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
+              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">
                 ${avgCostPerUser.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
@@ -367,10 +367,10 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       {/* Main Content */}
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Chart Section - Full Width */}
-        <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 shadow-sm">
+        <div className="bg-gray-50 dark:bg-gray-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 dark:border-gray-700 shadow-sm dark:shadow-gray-900/20">
           <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">Cost Distribution by User</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200">
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Cost Distribution by User</h3>
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700">
               <TrendingUp className="w-4 h-4" />
               <span>Last 30 days</span>
             </div>
@@ -381,18 +381,18 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
         </div>
         
         {/* User Details Section - Full Width */}
-        <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 shadow-sm">
+        <div className="bg-gray-50 dark:bg-gray-900 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-gray-200 dark:border-gray-700 shadow-sm dark:shadow-gray-900/20">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">User Details</h3>
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">User Details</h3>
             <div className="flex items-center gap-3">
               {/* Sort Controls */}
-              <div className="flex items-center border border-gray-300 rounded-lg bg-white">
+              <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
                 <button
                   onClick={() => setSortOrder('high-to-low')}
                   className={`px-3 py-1.5 flex items-center gap-1 text-sm rounded-l-lg ${
                     sortOrder === 'high-to-low' 
-                      ? 'bg-indigo-50 text-indigo-700' 
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
                   <span>High to Low</span>
@@ -402,8 +402,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                   onClick={() => setSortOrder('low-to-high')}
                   className={`px-3 py-1.5 flex items-center gap-1 text-sm rounded-r-lg ${
                     sortOrder === 'low-to-high' 
-                      ? 'bg-indigo-50 text-indigo-700' 
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                   }`}
                 >
                   <span>Low to High</span>
@@ -412,16 +412,16 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
               </div>
               
               {/* View Mode Controls */}
-              <div className="flex items-center gap-1 border border-gray-300 rounded-lg bg-white">
+              <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800">
                 <button 
                   onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-l-lg ${viewMode === 'grid' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                  className={`p-1.5 rounded-l-lg ${viewMode === 'grid' ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                 >
                   <Grid className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded-r-lg ${viewMode === 'list' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                  className={`p-1.5 rounded-r-lg ${viewMode === 'list' ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                 >
                   <List className="w-4 h-4" />
                 </button>
@@ -450,14 +450,14 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
               return (
                 <div 
                   key={user.user} 
-                  className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md ${
-                    viewingResourcesFor === user.user 
-                      ? 'border-indigo-300 ring-2 ring-indigo-100' 
-                      : 'border-gray-200 hover:border-indigo-200'
+                  className={`bg-white dark:bg-gray-800 rounded-xl border transition-all duration-200 overflow-hidden shadow-sm dark:shadow-gray-900/20 hover:shadow-md ${
+                    viewingResourcesFor === user.user
+                      ? 'border-indigo-300 ring-2 ring-indigo-100'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-indigo-200'
                   }`}
                 >
                   {/* User Header */}
-                  <div className="p-4 border-b border-gray-100">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -469,8 +469,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                           </div>
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">{user.user}</div>
-                          <div className="text-sm text-gray-500 flex items-center gap-1">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{user.user}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <Hash className="w-3 h-3" />
                             <span>{user.resources} resources</span>
                           </div>
@@ -480,18 +480,18 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                         <div className="font-bold text-base sm:text-lg text-indigo-600">
                           ${user.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <div className="text-xs text-gray-500">{totalPercentage}% of total</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{totalPercentage}% of total</div>
                       </div>
                     </div>
                   </div>
                   
                   {/* Cost Progress */}
-                  <div className="p-4 border-b border-gray-100">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                       <span>Cost Distribution</span>
                       <span>{totalPercentage}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div 
                         className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-2 rounded-full transition-all duration-500"
                         style={{ width: `${totalPercentage}%` }}
@@ -500,7 +500,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                   </div>
                   
                   {/* Actions */}
-                  <div className="p-3 flex justify-between items-center bg-gray-50">
+                  <div className="p-3 flex justify-between items-center bg-gray-50 dark:bg-gray-900">
                     <button
                       onClick={() => setViewingResourcesFor(viewingResourcesFor === user.user ? null : user.user)}
                       className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors"
@@ -515,7 +515,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                     
                     <button
                       onClick={() => setExpandedUser(expandedUser === user.user ? null : user.user)}
-                      className="p-1.5 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+                      className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
                     >
                       {expandedUser === user.user ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
@@ -523,25 +523,25 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                   
                   {/* Quick Resource Preview */}
                   {expandedUser === user.user && (
-                    <div className="border-t border-gray-200 p-4 bg-white">
-                      <div className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
                         <Server className="w-4 h-4" />
                         <span>Resource Preview</span>
                       </div>
                       {safeResourcesList.length > 0 ? (
                         <div className="space-y-2">
                           {safeResourcesList.slice(0, 3).map((resource, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span className="text-sm flex-shrink-0">{getResourceIcon(getResourceType(resource))}</span>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-gray-900 whitespace-nowrap overflow-x-auto py-1" title={resource}>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap overflow-x-auto py-1" title={resource}>
                                     {resource}
                                   </div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded">
                                   {getResourceType(resource)}
                                 </span>
                                 <button
@@ -563,9 +563,9 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                           )}
                         </div>
                       ) : (
-                        <div className="text-center py-4 text-gray-500">
+                        <div className="text-center py-4 text-gray-500 dark:text-gray-400">
                           <div className="flex flex-col items-center gap-2">
-                            <Braces className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 mx-auto" />
+                            <Braces className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400 dark:text-gray-500 mx-auto" />
                             <span className="text-sm">Resource details not available</span>
                             <span className="text-xs">Expected: {user.resources} resources</span>
                           </div>
@@ -583,7 +583,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
       {/* Resources Modal/Panel */}
       {viewingResourcesFor && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl dark:shadow-gray-900/20 w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-3 sm:px-6 sm:py-4 rounded-t-xl">
               <div className="flex items-center justify-between">
@@ -610,22 +610,22 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
             {/* Modal Content */}
             <div className="flex-1 overflow-hidden flex flex-col">
               {/* Search and Filter Bar */}
-              <div className="p-4 border-b border-gray-200">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
                     <input
                       type="text"
                       placeholder="Search resources..."
                       value={resourceSearchTerm}
                       onChange={(e) => setResourceSearchTerm(e.target.value)}
-                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full text-sm"
+                      className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
                     />
                   </div>
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={exportResources}
-                      className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+                      className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <Download className="w-4 h-4" />
                       <span>Export</span>
@@ -637,38 +637,38 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
               {/* Resources Table */}
               <div className="flex-1 overflow-auto">
                 <div className="overflow-x-auto">
-                <table className="min-w-[600px] w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 sticky top-0">
+                <table className="min-w-[600px] w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Resource ID
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredResources.length > 0 ? (
                       filteredResources.map((resource, index) => {
                         const resourceType = getResourceType(resource);
                         return (
-                          <tr key={index} className="hover:bg-gray-50">
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <span className="mr-3 text-lg">{getResourceIcon(resourceType)}</span>
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-gray-900 whitespace-nowrap overflow-x-auto py-1" title={resource}>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap overflow-x-auto py-1" title={resource}>
                                     {resource}
                                   </div>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">
+                              <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300">
                                 {resourceType}
                               </span>
                             </td>
@@ -676,7 +676,7 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => copyToClipboard(resource)}
-                                  className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50"
+                                  className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950"
                                 >
                                   {copiedResource === resource ? (
                                     <>
@@ -699,10 +699,10 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
                       <tr>
                         <td colSpan={3} className="px-6 py-12 text-center">
                           <div className="flex flex-col items-center gap-3">
-                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                              <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                              <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-gray-500" />
                             </div>
-                            <div className="text-gray-500">
+                            <div className="text-gray-500 dark:text-gray-400">
                               {resourceSearchTerm ? 'No resources match your search' : 
                                 getCurrentUser()?.resources === 0 ? 'This user has no resources' : 
                                 'No resources found'
@@ -726,8 +726,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
               </div>
               
               {/* Footer */}
-              <div className="border-t border-gray-200 px-4 py-3 sm:px-6 bg-gray-50 rounded-b-xl">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500">
+              <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-6 bg-gray-50 dark:bg-gray-900 rounded-b-xl">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                   <div>
                     Showing {filteredResources.length} of {getCurrentUser()?.resourcesList.length || 0} resources
                   </div>

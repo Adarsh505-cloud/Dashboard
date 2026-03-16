@@ -147,35 +147,35 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-4 lg:p-8">
+      <div className="min-h-screen p-4 lg:p-8 dark:bg-gray-950">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
             <button
               onClick={handleBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
+              className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-400">
                 Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
                 {isMasterView && ' (Master Payer)'}
               </p>
             </div>
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
+          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-8 text-center">
             <div className="flex items-center justify-center gap-4 mb-4">
               <Loader className="w-8 h-8 text-blue-600 animate-spin" />
-              <h2 className="text-2xl font-bold text-blue-800">Loading AWS Data</h2>
+              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">Loading AWS Data</h2>
             </div>
-            <p className="text-blue-700 mb-4">
+            <p className="text-blue-700 dark:text-blue-400 mb-4">
               Fetching real-time cost analysis from your AWS account. This may take a few moments...
             </p>
-            <div className="bg-blue-100 rounded-lg p-4 text-sm text-blue-800">
+            <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300">
               <p>• Querying AWS CUR data via Athena</p>
               <p>• Retrieving daily and weekly cost trends</p>
               <p>• Analyzing resource ownership and utilization</p>
@@ -196,27 +196,27 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     const isConnectionError = errorText.includes('Backend server not available') ||
                              errorText.includes('connection refused');
     return (
-      <div className="min-h-screen p-4 lg:p-8">
+      <div className="min-h-screen p-4 lg:p-8 dark:bg-gray-950">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
             <button
               onClick={handleBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200"
+              className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-gray-400">
                 Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
               </p>
             </div>
           </div>
           <div className={`border rounded-xl p-8 text-center ${
-            isCredentialsError ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+            isCredentialsError ? 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800' : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
           }`}>
             <div className="flex items-center justify-center gap-4 mb-4">
               {isCredentialsError ? (
@@ -225,14 +225,14 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                 <XCircle className="w-8 h-8 text-red-600" />
               )}
               <h2 className={`text-2xl font-bold ${
-                isCredentialsError ? 'text-amber-800' : 'text-red-800'
+                isCredentialsError ? 'text-amber-800 dark:text-amber-300' : 'text-red-800 dark:text-red-300'
               }`}>
                 {isCredentialsError ? 'Invalid AWS Credentials' : 'Error Retrieving Data'}
               </h2>
             </div>
-            
+
             <p className={`mb-6 ${
-              isCredentialsError ? 'text-amber-700' : 'text-red-700'
+              isCredentialsError ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'
             }`}>
               {isCredentialsError 
                 ? 'The provided AWS credentials are invalid or expired. Please check your Account ID and IAM Role ARN.'
@@ -275,23 +275,23 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     undefined;
 
   return (
-    <div className="min-h-screen p-3 sm:p-4 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-8 dark:bg-gray-950">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={handleBack}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 shrink-0"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200 shrink-0"
             >
               <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Back</span>
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 truncate">
                 {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
               </h1>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">
                 Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
                 {isMasterView && ' (Master Payer)'}
               </p>
@@ -304,7 +304,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 text-sm sm:text-base"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg dark:shadow-gray-900/20 hover:shadow-xl disabled:opacity-50 text-sm sm:text-base"
             >
               {isExporting ? (
                 <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -352,7 +352,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
             </div>
 
             {/* Navigation Tabs */}
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 mb-4 sm:mb-6 lg:mb-8 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 mb-4 sm:mb-6 lg:mb-8 overflow-hidden">
               <div className="flex overflow-x-auto scrollbar-hide">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -362,8 +362,8 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
                       onClick={() => setActiveTab(tab.key)}
                       className={`flex items-center gap-1.5 sm:gap-3 px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap transition-all duration-200 border-b-2 ${
                         activeTab === tab.key
-                          ? 'border-blue-500 text-blue-600 bg-blue-50'
-                          : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                          ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950'
+                          : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
                       }`}
                     >
                       <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
