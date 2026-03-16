@@ -12,6 +12,10 @@ export class CostService {
     this.accountId = String(accountId).trim();
     this.roleArn = String(roleArn).trim();
     this.targetAccountId = targetAccountId ? String(targetAccountId).trim() : null;
+
+    // Custom date range from frontend date selector
+    this.customStartDate = startDate || null;
+    this.customEndDate = endDate || null;
     
     this.region = process.env.ATHENA_REGION || 'us-east-1';
     
@@ -21,10 +25,6 @@ export class CostService {
     this.athenaDatabase = process.env.ATHENA_DATABASE || 'aws_cost_analysis_db';
     this.athenaCurTable = process.env.ATHENA_CUR_TABLE || 'data';
     this.athenaWorkGroup = process.env.ATHENA_WORKGROUP || 'primary';
-
-    // Custom date range (validated as YYYY-MM-DD by Joi middleware)
-    this.customStartDate = startDate || null;
-    this.customEndDate = endDate || null;
 
     this.bulkChunkSize = Number(process.env.BULK_CHUNK_SIZE || 200);
     this.ATHENA_POLL_MS = Number(process.env.ATHENA_POLL_MS || 22000);
@@ -39,28 +39,14 @@ export class CostService {
     };
   }
 
-  // Validate targetAccountId is safe for SQL interpolation (12-digit string only)
   get targetAccountFilter() {
-    if (!this.targetAccountId) return '';
-    if (!/^\d{12}$/.test(this.targetAccountId)) {
-      throw new Error('Invalid targetAccountId format');
-    }
-    return ` AND line_item_usage_account_id = '${this.targetAccountId}' `;
+    return this.targetAccountId ? ` AND line_item_usage_account_id = '${this.targetAccountId}' ` : '';
   }
 
-  // Cache credentials per instance to avoid repeated STS AssumeRole calls
   async getCredentials() {
-    const now = Date.now();
-    // Reuse cached credentials if they have at least 5 minutes left
-    if (this._cachedCredentials && this._credentialExpiry && (this._credentialExpiry - now > 5 * 60 * 1000)) {
-      return this._cachedCredentials;
-    }
-    const credentials = await fromTemporaryCredentials({
+    return fromTemporaryCredentials({
       params: { RoleArn: this.roleArn, RoleSessionName: `cost-analysis-${Date.now()}`, DurationSeconds: 3600 },
     })();
-    this._cachedCredentials = credentials;
-    this._credentialExpiry = now + 3600 * 1000; // 1 hour from now
-    return credentials;
   }
 
   async getAthenaClient() {
@@ -351,7 +337,7 @@ export class CostService {
   async getLinkedAccountsSummary() {
     try {
       const { Start, End } = this.getEffectiveDateRange(1);
-      const sql = `
+      const sqlPrimary = `
         SELECT
             line_item_usage_account_id AS linked_account_id,
             MAX(line_item_usage_account_name) AS linked_account_name,
@@ -361,30 +347,38 @@ export class CostService {
           AND date(line_item_usage_start_date) <= DATE '${End}'
         GROUP BY 1 ORDER BY total_cost DESC;
       `;
-      const rows = await this.runAthenaQuery(sql);
-      return rows.map(r => ({ accountId: r.linked_account_id, accountName: r.linked_account_name || null, cost: Number(r.total_cost || 0) }));
-    } catch (err) {
-      // Fallback if line_item_usage_account_name column doesn't exist
       try {
-        const { Start, End } = this.getEffectiveDateRange(1);
-        const fallbackSql = `
-          SELECT
-              line_item_usage_account_id AS linked_account_id,
-              SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
-          FROM ${this.athenaDatabase}.${this.athenaCurTable}
-          WHERE date(line_item_usage_start_date) >= DATE '${Start}'
-            AND date(line_item_usage_start_date) <= DATE '${End}'
-          GROUP BY 1 ORDER BY total_cost DESC;
-        `;
-        const rows = await this.runAthenaQuery(fallbackSql);
-        return rows.map(r => ({ accountId: r.linked_account_id, accountName: null, cost: Number(r.total_cost || 0) }));
-      } catch (e) { return []; }
-    }
+        const rows = await this.runAthenaQuery(sqlPrimary);
+        return rows.map(r => ({ 
+          accountId: r.linked_account_id, 
+          accountName: r.linked_account_name || null,
+          cost: Number(r.total_cost || 0) 
+        }));
+      } catch (err) {
+        if (err.message && err.message.includes('COLUMN_NOT_FOUND')) {
+          const sqlFallback = `
+            SELECT
+                line_item_usage_account_id AS linked_account_id,
+                SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
+            FROM ${this.athenaDatabase}.${this.athenaCurTable}
+            WHERE date(line_item_usage_start_date) >= DATE '${Start}'
+              AND date(line_item_usage_start_date) <= DATE '${End}'
+            GROUP BY 1 ORDER BY total_cost DESC;
+          `;
+          const fbRows = await this.runAthenaQuery(sqlFallback);
+          return fbRows.map(r => ({ accountId: r.linked_account_id, accountName: null, cost: Number(r.total_cost || 0) }));
+        }
+        throw err;
+      }
+    } catch (err) { return []; }
   }
 
   async getDailyCostData() {
     try {
-      const { Start, End } = this.getEffectiveDateRange(1);
+      const end = new Date();
+      const start = new Date(); start.setDate(start.getDate() - 30);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
 
       const sql = `
         SELECT
@@ -392,7 +386,7 @@ export class CostService {
           COALESCE(line_item_product_code, 'Unknown') AS service,
           SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost_usd
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}' AND date(line_item_usage_start_date) <= DATE '${endStr}'
           ${this.targetAccountFilter}
         GROUP BY 1, 2 ORDER BY day ASC, total_cost_usd DESC;
       `;
@@ -439,13 +433,16 @@ export class CostService {
 
   async getCostTrendData() {
     try {
-      const { Start, End } = this.getEffectiveDateRange(1);
+      const end = new Date();
+      const start = new Date(); start.setDate(start.getDate() - 30);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
 
       const sql = `
         SELECT date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
                SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS cost_cents
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}' AND date(line_item_usage_start_date) <= DATE '${endStr}'
           ${this.targetAccountFilter}
         GROUP BY 1 ORDER BY 1 ASC;
       `;
@@ -515,66 +512,69 @@ export class CostService {
       ({ Start, End } = this.getEffectiveDateRange(1));
     }
 
+    // Resolve user from multiple tag keys: user_owner, user_name, user:Owner, user:owner
+    const userTagExpr = `COALESCE(
+      NULLIF(TRIM(element_at(resource_tags, 'user_owner')), ''),
+      NULLIF(TRIM(element_at(resource_tags, 'user_name')), ''),
+      NULLIF(TRIM(element_at(resource_tags, 'user:Owner')), ''),
+      NULLIF(TRIM(element_at(resource_tags, 'user:owner')), '')
+    )`;
+
     const sqlPrimary = `
-      WITH owner_sums AS (
-        SELECT
-          COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
-          COALESCE(NULLIF(TRIM(element_at(resource_tags, 'user:Owner')), '')) AS explicit_owner,
-          SUM(COALESCE(line_item_unblended_cost, 0)) AS owner_cost,
-          COUNT(*) AS owner_rows
-        FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
-          AND (line_item_unblended_cost IS NOT NULL)
-          AND COALESCE(NULLIF(TRIM(element_at(resource_tags, 'user:Owner')), '')) IS NOT NULL
-          ${this.targetAccountFilter}
-        GROUP BY
-          COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id),
-          COALESCE(NULLIF(TRIM(element_at(resource_tags, 'user:Owner')), ''))
-      ),
-      owner_ranked AS (
-        SELECT resource_id, explicit_owner, owner_cost, owner_rows, row_number() OVER (PARTITION BY resource_id ORDER BY owner_cost DESC, owner_rows DESC) AS rn
-        FROM owner_sums
-      ),
-      owner_lookup AS ( SELECT resource_id, explicit_owner AS inferred_owner FROM owner_ranked WHERE rn = 1 ),
-      resolved_rows AS (
-        SELECT
-          COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) AS resource_id,
-          COALESCE(NULLIF(TRIM(element_at(t.resource_tags, 'user:Owner')), '')) AS explicit_owner,
-          l.inferred_owner,
-          COALESCE(NULLIF(TRIM(element_at(t.resource_tags, 'user:Owner')), ''), l.inferred_owner) AS resolved_owner,
-          COALESCE(t.line_item_unblended_cost, 0) AS usd_cost
-        FROM ${this.athenaDatabase}.${this.athenaCurTable} t
-        LEFT JOIN owner_lookup l ON COALESCE(NULLIF(TRIM(t.line_item_resource_id), ''), t.identity_line_item_id) = l.resource_id
-        WHERE date(t.line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
-          AND (t.line_item_unblended_cost IS NOT NULL) ${this.targetAccountFilter}
-      )
       SELECT
-        resolved_owner AS user_owner, array_join(array_agg(DISTINCT resource_id), ',') AS resources_csv,
-        array_agg(DISTINCT resource_id) AS resources_array, COUNT(DISTINCT resource_id) AS resource_count,
-        SUM(usd_cost) AS total_usd, SUM(CAST(ROUND(usd_cost * 100, 0) AS BIGINT)) AS total_cents, COUNT(*) AS rows_count
-      FROM resolved_rows WHERE resolved_owner IS NOT NULL GROUP BY resolved_owner ORDER BY total_cents DESC LIMIT 500;
+        ${userTagExpr} AS user_name,
+        ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS total_usd,
+        SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS total_cents,
+        COUNT(DISTINCT line_item_resource_id) AS resource_count,
+        array_join(array_agg(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), '')), ',') AS resources_csv
+      FROM ${this.athenaDatabase}.${this.athenaCurTable}
+      WHERE date(line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
+        AND line_item_unblended_cost > 0
+        AND ${userTagExpr} IS NOT NULL
+        ${this.targetAccountFilter}
+      GROUP BY ${userTagExpr}
+      ORDER BY total_usd DESC
+      LIMIT 500
     `;
+
+    console.log(`[getUserCosts] Date range: ${Start} to ${End}`);
+    console.log(`[getUserCosts] SQL:`, sqlPrimary);
 
     try {
       const rows = await this.runAthenaQuery(sqlPrimary);
-      return rows.map(r => ({ user: r.user_owner, cost: Number(r.total_usd || 0), cost_cents: Number(r.total_cents || 0), resources: Number(r.resource_count || 0), resourcesList: r.resources_array || [] }));
+      console.log(`[getUserCosts] Returned ${rows.length} users`);
+      if (rows.length > 0) console.log(`[getUserCosts] Sample:`, JSON.stringify(rows[0]));
+      return rows.map(r => ({
+        user: r.user_name,
+        cost: Number(r.total_usd || 0),
+        cost_cents: Number(r.total_cents || 0),
+        resources: Number(r.resource_count || 0),
+        resourcesList: r.resources_csv ? r.resources_csv.split(',').filter(Boolean) : []
+      }));
     } catch (err) {
+      console.error(`[getUserCosts] Error:`, err.message);
       if (err.message && (err.message.includes('COLUMN_NOT_FOUND') || err.message.includes('TABLE_NOT_FOUND') || err.message.includes('cannot be resolved'))) {
+        console.log(`[getUserCosts] Falling back to untagged query...`);
         const fallbackSql = `
           SELECT
-            'Unknown' AS user_owner,
-            array_join(array_agg(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)), ',') AS resources_csv,
-            array_agg(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resources_array, 
+            'Unknown' AS user_name,
+            ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS total_usd,
+            SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS total_cents,
             COUNT(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), identity_line_item_id)) AS resource_count,
-            SUM(COALESCE(line_item_unblended_cost, 0)) AS total_usd, 
-            SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS total_cents, 
-            COUNT(*) AS rows_count
+            array_join(array_agg(DISTINCT COALESCE(NULLIF(TRIM(line_item_resource_id), ''), '')), ',') AS resources_csv
           FROM ${this.athenaDatabase}.${this.athenaCurTable}
           WHERE date(line_item_usage_start_date) BETWEEN DATE '${Start}' AND DATE '${End}'
-            AND (line_item_unblended_cost IS NOT NULL) ${this.targetAccountFilter}
+            AND line_item_unblended_cost > 0
+            ${this.targetAccountFilter}
         `;
         const fbRows = await this.runAthenaQuery(fallbackSql);
-        return fbRows.map(r => ({ user: r.user_owner, cost: Number(r.total_usd || 0), cost_cents: Number(r.total_cents || 0), resources: Number(r.resource_count || 0), resourcesList: r.resources_array || [] }));
+        return fbRows.map(r => ({
+          user: r.user_name,
+          cost: Number(r.total_usd || 0),
+          cost_cents: Number(r.total_cents || 0),
+          resources: Number(r.resource_count || 0),
+          resourcesList: r.resources_csv ? r.resources_csv.split(',').filter(Boolean) : []
+        }));
       }
       return [];
     }
@@ -582,13 +582,13 @@ export class CostService {
 
   async getResourceCosts() {
     try {
-      const { Start, End } = this.getEffectiveDateRange(1);
+      const { Start: startStr, End: endStr } = this.getEffectiveDateRange(1);
 
       const sql = `
         SELECT COALESCE(line_item_product_code, 'Unknown') AS service, date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
                SUM( COALESCE(line_item_unblended_cost, 0) ) AS daily_cost, COUNT(DISTINCT line_item_resource_id) AS resource_count
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}' AND date(line_item_usage_start_date) <= DATE '${endStr}'
           AND line_item_resource_id IS NOT NULL AND COALESCE(line_item_product_code, '') <> '' ${this.targetAccountFilter}
         GROUP BY COALESCE(line_item_product_code, 'Unknown'), date_format(line_item_usage_start_date, '%Y-%m-%d')
         ORDER BY service, day;
@@ -675,86 +675,119 @@ export class CostService {
     }
   }
 
-  // Region-to-approximate-carbon-intensity mapping (gCO2eq/kWh)
-  // Source: approximate values based on AWS region energy mix data
-  static REGION_CARBON_INTENSITY = {
-    'US East (N. Virginia)': 0.415,
-    'US East (Ohio)': 0.415,
-    'US West (N. California)': 0.230,
-    'US West (Oregon)': 0.100,
-    'Europe (Ireland)': 0.320,
-    'Europe (Frankfurt)': 0.350,
-    'Europe (London)': 0.230,
-    'Asia Pacific (Tokyo)': 0.510,
-    'Asia Pacific (Singapore)': 0.410,
-    'Asia Pacific (Sydney)': 0.700,
-    'Asia Pacific (Mumbai)': 0.720,
-    'Canada (Central)': 0.130,
-    'South America (Sao Paulo)': 0.074,
-  };
-
-  async getCarbonFootprint() {
-    try {
-      const { Start, End } = this.getEffectiveDateRange(1);
-      const sql = `
-        SELECT
-          CASE WHEN product_location IS NULL OR trim(product_location) = '' THEN 'Global'
-               WHEN lower(product_location) IN ('any','(any)','unknown') THEN 'Global'
-               ELSE product_location END AS region,
-          SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
-          COUNT(DISTINCT line_item_resource_id) AS resource_count
-        FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
-          ${this.targetAccountFilter}
-        GROUP BY 1 ORDER BY total_cost DESC;
-      `;
-      const rows = await this.runAthenaQuery(sql);
-      return rows.map(r => {
-        const regionName = r.region || 'Global';
-        const cost = Number(r.total_cost || 0);
-        // Approximate emissions: cost as proxy for usage * carbon intensity
-        const intensity = CostService.REGION_CARBON_INTENSITY[regionName] || 0.400;
-        const emissions = Number((cost * intensity * 0.001).toFixed(4)); // tonnes CO2eq
-        return {
-          region: regionName,
-          emissions,
-          count: Number(r.resource_count || 0),
-        };
-      }).filter(x => x.emissions > 0 || x.count > 0);
-    } catch (err) {
-      console.error('Error fetching carbon footprint:', err.message);
-      return [];
-    }
-  }
-
   async getTopSpendingResources() {
     try {
-      const { Start, End } = this.getEffectiveDateRange(1);
-      const sql = `
+      const regionExpr = `
+        COALESCE(
+          NULLIF(trim(product_region_code), ''),
+          CASE
+            WHEN strpos(line_item_resource_id, ':') > 0
+            THEN NULLIF(split_part(line_item_resource_id, ':', 4), '')
+            ELSE NULL
+          END,
+          NULLIF(regexp_extract(line_item_availability_zone, '^([a-z]+-[a-z]+-[0-9]+)', 1), ''),
+          'unknown'
+        ) AS region
+      `;
+  
+      const resourceTypeExpr = `
+        CASE
+          WHEN strpos(line_item_resource_id, ':') > 0 THEN split_part(split_part(line_item_resource_id, ':', 6), '/', 1)
+          WHEN line_item_resource_id LIKE 'i-%' THEN 'ec2-instance'
+          WHEN line_item_resource_id LIKE 'vol-%' THEN 'ebs-volume'
+          WHEN line_item_resource_id LIKE 'snap-%' THEN 'ebs-snapshot'
+          WHEN line_item_resource_id LIKE 'nat-%' THEN 'natgateway'
+          ELSE 'other'
+        END AS resource_type
+      `;
+  
+      const whereClause = `
+        WHERE date(line_item_usage_start_date) >= (current_date - interval '30' day)
+          AND (line_item_resource_id IS NOT NULL OR identity_line_item_id IS NOT NULL)
+          AND trim(COALESCE(line_item_resource_id, identity_line_item_id, '')) <> ''
+          ${this.targetAccountFilter}
+      `;
+  
+      const mapRow = (r, includeAccountName) => ({
+        service: r.service || 'Unknown',
+        resource_type: r.resource_type || 'other',
+        region: r.region || 'unknown',
+        resource_id: r.resource_id || r.raw_resource_id || 'unknown',
+        raw_resource_id: r.raw_resource_id || null,
+        account_id: r.line_item_usage_account_id || 'Unknown',
+        account_name: includeAccountName ? (r.account_name || null) : null,
+        total_cost: Number(r.total_cost || 0),
+      });
+  
+      const sqlPrimary = `
         SELECT
             COALESCE(line_item_product_code, 'Unknown') AS service,
-            CASE
-                WHEN strpos(line_item_resource_id, ':') > 0 THEN split_part(split_part(line_item_resource_id, ':', 6), '/', 1)
-                WHEN line_item_resource_id LIKE 'i-%' THEN 'ec2-instance'
-                WHEN line_item_resource_id LIKE 'vol-%' THEN 'ebs-volume'
-                WHEN line_item_resource_id LIKE 'snap-%' THEN 'ebs-snapshot'
-                WHEN line_item_resource_id LIKE 'nat-%' THEN 'nat-gateway'
-                ELSE 'other'
-            END AS resource_type,
+            ${resourceTypeExpr},
+            ${regionExpr},
             COALESCE(regexp_extract(trim(line_item_resource_id), '([^/]+)$', 1), NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
             COALESCE(NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS raw_resource_id,
-            line_item_usage_account_id AS account_id,
+            line_item_usage_account_id,
             MAX(line_item_usage_account_name) AS account_name,
-            SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
+            SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
-        WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
-          AND (line_item_resource_id IS NOT NULL OR identity_line_item_id IS NOT NULL) AND trim(COALESCE(line_item_resource_id, identity_line_item_id, '')) <> ''
-          ${this.targetAccountFilter}
-        GROUP BY 1, 2, 3, 4, 5 ORDER BY total_cost DESC LIMIT 10;
+        ${whereClause}
+        GROUP BY 1, 2, 3, 4, 5, 6
+        ORDER BY total_cost DESC
+        LIMIT 10;
+      `;
+  
+      try {
+        const rows = await this.runAthenaQuery(sqlPrimary);
+        return (rows || []).map(r => mapRow(r, true));
+      } catch (err) {
+        if (err.message && err.message.includes('COLUMN_NOT_FOUND')) {
+          const sqlFallback = `
+            SELECT
+                COALESCE(line_item_product_code, 'Unknown') AS service,
+                ${resourceTypeExpr},
+                ${regionExpr},
+                COALESCE(regexp_extract(trim(line_item_resource_id), '([^/]+)$', 1), NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS resource_id,
+                COALESCE(NULLIF(trim(line_item_resource_id), ''), identity_line_item_id) AS raw_resource_id,
+                line_item_usage_account_id,
+                SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost
+            FROM ${this.athenaDatabase}.${this.athenaCurTable}
+            ${whereClause}
+            GROUP BY 1, 2, 3, 4, 5, 6
+            ORDER BY total_cost DESC
+            LIMIT 10;
+          `;
+          const fbRows = await this.runAthenaQuery(sqlFallback);
+          return (fbRows || []).map(r => mapRow(r, false));
+        }
+        throw err;
+      }
+    } catch (err) { return []; }
+  }
+
+  // FIXED: Added getCarbonFootprint to fetch directly from the new carbon_model table
+  async getCarbonFootprint() {
+    try {
+      const sql = `
+        SELECT 
+            region_code AS region,
+            SUM(COALESCE(total_lbm_emissions_value, 0)) AS emissions,
+            COUNT(DISTINCT product_code) AS count
+        FROM ${this.athenaDatabase}.carbon_model_version_v3_0_0
+        WHERE region_code IS NOT NULL AND TRIM(region_code) <> ''
+          ${this.targetAccountId ? `AND (usage_account_id = '${this.targetAccountId}' OR payer_account_id = '${this.targetAccountId}')` : ''}
+        GROUP BY region_code
+        ORDER BY emissions DESC;
       `;
       const rows = await this.runAthenaQuery(sql);
-      return (rows || []).map(r => ({ service: r.service || 'Unknown', resource_type: r.resource_type || 'other', resource_id: r.resource_id || r.raw_resource_id || 'unknown', raw_resource_id: r.raw_resource_id || null, account_id: r.account_id || null, account_name: r.account_name || null, total_cost: Number(r.total_cost || 0) }));
-    } catch (err) { return []; }
+      return rows.map(r => ({
+        region: r.region,
+        emissions: Number(r.emissions || 0),
+        count: Number(r.count || 0)
+      }));
+    } catch (err) {
+      console.warn(`[costService] Carbon Footprint table might not exist yet or failed: ${err.message}`);
+      return []; // Return empty array so the main dashboard doesn't crash if the table is missing
+    }
   }
 
   getResourceTypeForService(serviceName) {

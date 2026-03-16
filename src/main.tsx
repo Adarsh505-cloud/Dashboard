@@ -7,10 +7,10 @@ import { AuthProvider } from 'react-oidc-context';
 import type { User } from 'oidc-client-ts';
 
 const cognitoAuthConfig = {
-  authority: import.meta.env.VITE_COGNITO_AUTHORITY || "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID || "641sh8j3j5iv62aot4ecnlpc3q",
-  redirect_uri: import.meta.env.VITE_REDIRECT_URI || "https://cloudbillanalyzer.epiuse-aws.com",
-  post_logout_redirect_uri: import.meta.env.VITE_REDIRECT_URI || "https://cloudbillanalyzer.epiuse-aws.com",
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  redirect_uri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
+  post_logout_redirect_uri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
   response_type: "code",
   scope: "phone openid email",
   automaticSilentRenew: true,
