@@ -52,8 +52,8 @@ export interface OnboardedAccount {
 const API_GATEWAY_URL = import.meta.env.VITE_API_GATEWAY_URL || '';
 
 export const cognitoAuthConfig = {
-  authority: import.meta.env.VITE_COGNITO_AUTHORITY || "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID || "641sh8j3j5iv62aot4ecnlpc3q",
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
 };
 
 // --- HELPER TO GET AUTH TOKEN ---

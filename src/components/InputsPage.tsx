@@ -105,9 +105,9 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   };
   
   const cognitoConfig = {
-    domain: "us-west-2xf0vqvyuh.auth.us-west-2.amazoncognito.com",
-    clientId: "641sh8j3j5iv62aot4ecnlpc3q",
-    redirectUri: "https://cloudbillanalyzer.epiuse-aws.com",
+    domain: import.meta.env.VITE_COGNITO_DOMAIN,
+    clientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
+    redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
   };
   
   const handlePasswordReset = () => {
@@ -120,7 +120,7 @@ const InputsPage: React.FC<InputsPageProps> = ({ onGetDetails, auth }) => {
   };
   
   const handleSignOut = () => {
-    const logoutUrl = "https://cloudbillanalyzer.epiuse-aws.com";
+    const logoutUrl = import.meta.env.VITE_REDIRECT_URI || window.location.origin;
     auth.signoutRedirect({
         extraQueryParams: {
             client_id: auth.settings.client_id,

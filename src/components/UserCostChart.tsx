@@ -55,8 +55,8 @@ const UserCostChart: React.FC<UserCostChartProps> = ({ data, isExporting }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sortOrder, setSortOrder] = useState<'high-to-low' | 'low-to-high'>('high-to-low');
 
-  // ADDED: Filter data to only include users with an "@" symbol in their name.
-  const filteredData = data.filter(item => item.user && item.user.includes('@'));
+  // Filter data to only include users with a valid name
+  const filteredData = data.filter(item => item.user && item.user.trim() !== '');
 
   useEffect(() => {
     // CHANGED: Use filteredData for logging
