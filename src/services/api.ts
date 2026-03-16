@@ -9,8 +9,10 @@ export interface ResourceDetail {
   owner: string;
   project: string;
   createdDate: string;
-  status: 'running' | 'stopped' | 'pending' | 'terminated' | 'unknown';
+  status: 'running' | 'stopped' | 'pending' | 'terminated' | 'likely_terminated' | 'unknown';
   cost: number;
+  lastSeenDate?: string | null;
+  firstSeenDate?: string | null;
   tags: Array<{ key: string; value: string }>;
   specifications?: {
     instanceType?: string;

@@ -269,7 +269,9 @@ export class CostService {
             SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
             MAX(element_at(resource_tags, 'user:Owner')) AS owner_tag,
             MAX(element_at(resource_tags, 'user:Project')) AS project_tag,
-            array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
+            array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types,
+            CAST(MAX(date(line_item_usage_start_date)) AS VARCHAR) AS last_seen_date,
+            CAST(MIN(date(line_item_usage_start_date)) AS VARCHAR) AS first_seen_date
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
         WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
           AND line_item_resource_id IS NOT NULL
@@ -292,7 +294,9 @@ export class CostService {
               COALESCE(line_item_product_code, 'Unknown') AS product_code,
               product_location,
               SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
-              array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
+              array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types,
+              CAST(MAX(date(line_item_usage_start_date)) AS VARCHAR) AS last_seen_date,
+              CAST(MIN(date(line_item_usage_start_date)) AS VARCHAR) AS first_seen_date
           FROM ${this.athenaDatabase}.${this.athenaCurTable}
           WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
             AND line_item_resource_id IS NOT NULL
@@ -317,6 +321,10 @@ export class CostService {
         this.getDeletionEventsForResources(resourceIds)
       ]);
 
+      // Determine today's date for "last seen" comparison (2-day threshold)
+      const todayStr = new Date().toISOString().split('T')[0];
+      const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       const finalResult = rows.map(r => {
         const c = creationMap.get(r.line_item_resource_id) || {};
         const d = deletionMap.get(r.line_item_resource_id) || {};
@@ -324,6 +332,16 @@ export class CostService {
         const tags = [];
         if (r.owner_tag) tags.push({ key: 'user_owner', value: r.owner_tag });
         if (r.project_tag) tags.push({ key: 'user_project', value: r.project_tag });
+
+        // Infer status from CUR last_seen_date (more reliable than CloudTrail)
+        // Priority: 1) CloudTrail deletion → terminated, 2) last_seen > 1 day ago → likely_terminated, 3) active
+        const lastSeen = r.last_seen_date || null;
+        let status = 'running';
+        if (d.deletionDate) {
+          status = 'terminated';
+        } else if (lastSeen && lastSeen < oneDayAgo) {
+          status = 'likely_terminated';
+        }
 
         return {
           accountId: r.line_item_usage_account_id || 'Unknown',
@@ -335,7 +353,9 @@ export class CostService {
           project: r.project_tag || 'Unassigned',
           createdDate: c.createdDate || null,
           createdBy: c.createdBy || null,
-          status: d.deletionDate ? 'terminated' : 'running',
+          status,
+          lastSeenDate: lastSeen,
+          firstSeenDate: r.first_seen_date || null,
           deletionDate: d.deletionDate || null,
           deletedBy: d.deletedBy || null,
           cost: Number(r.total_cost || 0),

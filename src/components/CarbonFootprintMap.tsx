@@ -214,23 +214,23 @@ const CarbonFootprintMap: React.FC<CarbonFootprintMapProps> = ({ data = [] }) =>
         .emission-high { background: rgba(239, 68, 68, 0.1); color: #EF4444; }
         .emission-negligible { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
       `}</style>
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Cloud className="text-blue-600" />
               Cloud Carbon Footprint
             </h3>
-            <p className="text-gray-500">Live geographic distribution of carbon emissions from Athena</p>
+            <p className="text-gray-500 dark:text-gray-400">Live geographic distribution of carbon emissions from Athena</p>
           </div>
           <div className="flex gap-4">
             <div className="text-right">
-              <div className="text-sm text-gray-500 font-medium">Unique Resources</div>
-              <div className="text-2xl font-bold text-gray-800">{totalResources || '—'}</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Unique Resources</div>
+              <div className="text-2xl font-bold text-gray-800 dark:text-gray-100">{totalResources || '—'}</div>
             </div>
             <div className="text-right">
-              <div className="text-sm text-gray-500 font-medium">Trend</div>
-              <div className="text-2xl font-bold text-gray-800 flex items-center justify-end gap-1">
+              <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">Trend</div>
+              <div className="text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center justify-end gap-1">
                 {totalResources ? 'Active' : '—'}
                 {totalResources > 0 && <ArrowUp className="w-4 h-4 text-green-500" />}
               </div>
@@ -238,10 +238,10 @@ const CarbonFootprintMap: React.FC<CarbonFootprintMapProps> = ({ data = [] }) =>
           </div>
         </div>
 
-        <div className="relative h-[560px] rounded-lg border border-gray-200">
+        <div className="relative h-[560px] rounded-lg border border-gray-200 dark:border-gray-700">
           {(!data || data.length === 0) && (
-            <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center z-20">
-              <p className="text-gray-500">No recent carbon footprint data found for this account.</p>
+            <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex flex-col items-center justify-center z-20">
+              <p className="text-gray-500 dark:text-gray-400">No recent carbon footprint data found for this account.</p>
             </div>
           )}
           <div ref={mapContainerRef} className="h-full w-full rounded-lg" />

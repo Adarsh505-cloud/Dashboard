@@ -95,19 +95,19 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ dateRange, onDate
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-500">
+        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
           <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span className="font-medium">{formatDisplayRange()}</span>
         </div>
-        <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg sm:rounded-xl p-0.5 sm:p-1">
+        <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 dark:bg-gray-950 rounded-lg sm:rounded-xl p-0.5 sm:p-1">
           {presets.map((p) => (
             <button
               key={p.key}
               onClick={() => handlePresetClick(p.key)}
               className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 ${
                 dateRange.preset === p.key
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-blue-600'
+                  ? 'bg-white dark:bg-gray-800 text-blue-600 shadow-sm dark:shadow-gray-900/20'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-blue-600'
               }`}
             >
               {p.label}
@@ -124,15 +124,15 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({ dateRange, onDate
               value={customStart}
               max={today()}
               onChange={(e) => { setCustomStart(e.target.value); setError(''); }}
-              className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-[130px] sm:w-auto"
+              className="px-2 sm:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-[130px] sm:w-auto bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             />
-            <span className="text-gray-400 text-xs sm:text-sm">to</span>
+            <span className="text-gray-400 dark:text-gray-500 text-xs sm:text-sm">to</span>
             <input
               type="date"
               value={customEnd}
               max={today()}
               onChange={(e) => { setCustomEnd(e.target.value); setError(''); }}
-              className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-[130px] sm:w-auto"
+              className="px-2 sm:px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none w-[130px] sm:w-auto bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             />
           </div>
           <button
