@@ -188,7 +188,7 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
             <p className="text-blue-100 text-xs sm:text-sm">Breakdown of AWS service costs across regions</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mt-4 sm:mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mt-4 sm:mt-6">
           <div className="bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
             <div className="text-lg sm:text-2xl font-bold">{filteredServices.length}</div>
             <div className="text-blue-100 text-xs sm:text-sm">Services</div>

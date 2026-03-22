@@ -229,7 +229,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
         </div>
 
         <div className="h-48 sm:h-60 lg:h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <LineChart data={DAILY_DATA} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#374151" : "#f1f5f9"} vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 11, fill: isDark ? "#9ca3af" : "#9ca3af" }} axisLine={false} tickLine={false} minTickGap={30} />
@@ -265,7 +265,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
           </div>
           
           <div className="relative h-56 mb-4">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie data={ACCOUNTS} cx="50%" cy="50%" innerRadius={65} outerRadius={95}
                   paddingAngle={2} dataKey="cost" nameKey="id" stroke="none"
