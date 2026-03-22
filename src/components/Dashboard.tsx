@@ -147,42 +147,103 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-4 lg:p-8 dark:bg-gray-950">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400">
-                Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
-                {isMasterView && ' (Master Payer)'}
-              </p>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 relative overflow-hidden">
+        {/* Animated background grid */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(59,130,246,0.5) 1px, transparent 0)',
+            backgroundSize: '40px 40px'
+          }}></div>
+        </div>
+
+        {/* Floating particles */}
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-cyan-500/30 rounded-full animate-pulse"></div>
+        <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-blue-500/20 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-indigo-500/25 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+        <div className="absolute top-1/2 right-1/4 w-1.5 h-1.5 bg-cyan-400/30 rounded-full animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+
+        {/* Back button */}
+        <button
+          onClick={handleBack}
+          className="absolute top-5 left-5 flex items-center gap-2 px-3 py-2 text-cyan-400 hover:text-white hover:bg-white/10 rounded-lg transition-all text-sm z-10"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <div className="w-full max-w-sm text-center relative z-10">
+          {/* Animated ring + dollar icon */}
+          <div className="relative w-28 h-28 mx-auto mb-8">
+            {/* Outer glow ring */}
+            <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 opacity-20 blur-lg animate-pulse"></div>
+            {/* Outer rotating ring */}
+            <div className="absolute inset-0 rounded-full border-2 border-gray-700"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-blue-500 animate-spin" style={{ animationDuration: '2s' }}></div>
+            {/* Inner rotating ring (opposite direction) */}
+            <div className="absolute inset-3 rounded-full border-2 border-gray-800"></div>
+            <div className="absolute inset-3 rounded-full border-2 border-transparent border-b-indigo-400 border-l-cyan-500 animate-spin" style={{ animationDuration: '3s', animationDirection: 'reverse' }}></div>
+            {/* Center icon */}
+            <div className="absolute inset-5 rounded-full bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <DollarSign className="w-8 h-8 text-white" />
             </div>
           </div>
-          <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-xl p-8 text-center">
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <Loader className="w-8 h-8 text-blue-600 animate-spin" />
-              <h2 className="text-2xl font-bold text-blue-800 dark:text-blue-300">Loading AWS Data</h2>
+
+          {/* Title */}
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+              Analyzing Costs
+            </span>
+          </h2>
+          <p className="text-sm text-gray-400 mb-10 font-mono">
+            {targetAccountId ? `${targetAccountId}` : credentials.accountId}
+            {isMasterView && ' (Organization)'}
+          </p>
+
+          {/* Progress steps */}
+          <div className="space-y-4 text-left max-w-xs mx-auto mb-10">
+            {[
+              'Querying CUR data via Athena',
+              'Retrieving cost trends',
+              'Analyzing resources',
+              'Generating recommendations',
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm" style={{ animationDelay: `${i * 200}ms` }}>
+                <div className="relative w-5 h-5 shrink-0">
+                  <div className="absolute inset-0 rounded-full border-2 border-cyan-500/40"></div>
+                  <div
+                    className="absolute inset-[3px] rounded-full bg-cyan-400 animate-pulse"
+                    style={{ animationDelay: `${i * 400}ms`, animationDuration: '1.5s' }}
+                  ></div>
+                </div>
+                <span className="text-gray-300">{step}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full max-w-xs mx-auto">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 rounded-full"
+                style={{
+                  animation: 'progressBar 8s ease-in-out infinite',
+                  width: '0%',
+                }}
+              ></div>
             </div>
-            <p className="text-blue-700 dark:text-blue-400 mb-4">
-              Fetching real-time cost analysis from your AWS account. This may take a few moments...
-            </p>
-            <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-300">
-              <p>• Querying AWS CUR data via Athena</p>
-              <p>• Retrieving daily and weekly cost trends</p>
-              <p>• Analyzing resource ownership and utilization</p>
-              <p>• Generating optimization recommendations</p>
-            </div>
+            <p className="text-xs text-gray-500 mt-3 tracking-wide">Processing...</p>
           </div>
         </div>
+
+        <style>{`
+          @keyframes progressBar {
+            0% { width: 5%; }
+            20% { width: 25%; }
+            40% { width: 45%; }
+            60% { width: 65%; }
+            80% { width: 85%; }
+            100% { width: 95%; }
+          }
+        `}</style>
       </div>
     );
   }
@@ -278,42 +339,44 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     <div className="min-h-screen p-3 sm:p-4 lg:p-8 dark:bg-gray-950">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200 shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Back</span>
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 truncate">
-                {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">
-                Account: {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
-                {isMasterView && ' (Master Payer)'}
-              </p>
+        <div className="flex flex-col gap-3 mb-4 sm:mb-6 lg:mb-8">
+          {/* Row 1: Back + Title + Export */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all duration-200 shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline text-sm">Back</span>
+              </button>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                  {isMasterView ? 'Organization Dashboard' : 'Cost Dashboard'}
+                </h1>
+                <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 truncate font-mono">
+                  {targetAccountId ? `${targetAccountId} (Linked)` : credentials.accountId}
+                  {isMasterView && ' (Master Payer)'}
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-            <DateRangeSelector dateRange={dateRange} onDateRangeChange={setDateRange} />
-
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg dark:shadow-gray-900/20 hover:shadow-xl disabled:opacity-50 text-sm sm:text-base"
+              className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg dark:shadow-gray-900/20 disabled:opacity-50 text-xs sm:text-sm shrink-0"
             >
               {isExporting ? (
-                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
               ) : (
-                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               )}
-              {isExporting ? 'Generating...' : 'Export PDF'}
+              <span className="hidden sm:inline">{isExporting ? 'Generating...' : 'Export PDF'}</span>
+              <span className="sm:hidden">{isExporting ? '...' : 'PDF'}</span>
             </button>
           </div>
+
+          {/* Row 2: Date selector */}
+          <DateRangeSelector dateRange={dateRange} onDateRangeChange={setDateRange} />
         </div>
 
         {isMasterView ? (
@@ -396,7 +459,10 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
         )}
       </div>
 
-      <ChatbotWidget accountId={credentials.accountId} accountType={credentials.accountType} />
+      <ChatbotWidget
+        accountId={targetAccountId || credentials.accountId}
+        accountType={targetAccountId ? 'standalone' : credentials.accountType}
+      />
     </div>
   );
 };

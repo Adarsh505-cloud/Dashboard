@@ -10,6 +10,8 @@ const router = express.Router();
 const lambdaClient = new LambdaClient({});
 
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 Hours
+// Bump this version whenever query logic changes to auto-invalidate stale caches
+const CACHE_VERSION = 'v3';
 
 /**
  * S3 Cache Wrapper: Intercepts the request and serves from S3 if fresh (< 8 hours).
@@ -31,7 +33,7 @@ async function getCachedData(accountId, roleArn, cacheKey, fetchCallback) {
 
   // 3. Extract the final clean bucket name
   const bucketName = rawPath.toLowerCase().replace(/['"]/g, '').trim().replace('s3://', '').split('/')[0];
-  const objectKey = `dashboard-cache/${cacheKey}.json`;
+  const objectKey = `dashboard-cache/${CACHE_VERSION}/${cacheKey}.json`;
 
   const credentials = await fromTemporaryCredentials({
     params: { RoleArn: roleArn, RoleSessionName: `cache-read-${Date.now()}`, DurationSeconds: 3600 }

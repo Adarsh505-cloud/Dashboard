@@ -65,8 +65,10 @@ Context Account ID: ${accountId}
 3. To get a breakdown by linked account, simply GROUP BY "line_item_usage_account_id". NEVER invent or hallucinate tags for this.
 `;
     } else {
-        contextualizedPrompt += `1. THIS IS A SINGLE LINKED ACCOUNT.
-2. You MUST append "WHERE line_item_usage_account_id = '${accountId}'" to every single CUR query to restrict data to this specific account.
+        contextualizedPrompt += `1. THIS IS A SINGLE LINKED ACCOUNT (${accountId}).
+2. For the CUR "data" table: ALWAYS filter with line_item_usage_account_id = '${accountId}'
+3. For the "cur_recomdations_v1" table: ALWAYS filter with account_id = '${accountId}'
+4. NEVER use line_item_usage_account_id on cur_recomdations_v1 — that column does not exist there.
 `;
     }
 

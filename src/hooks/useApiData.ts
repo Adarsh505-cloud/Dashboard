@@ -96,13 +96,14 @@ const emptyData: ApiData = {
 
 export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult => {
   const [data, setData] = useState<ApiData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start true to avoid error flash on first render
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!credentials) {
       console.log('📝 No credentials provided');
       setData(emptyData);
+      setLoading(false);
       return;
     }
 
@@ -144,7 +145,7 @@ export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult
       console.error('❌ Failed to fetch API data:', errorMessage);
       
       setError(errorMessage);
-      setData(emptyData);
+      setData(null);
     } finally {
       setLoading(false);
     }
