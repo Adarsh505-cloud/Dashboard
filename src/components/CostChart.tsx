@@ -24,6 +24,7 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 interface ServiceCost {
   service: string;
+  productCode?: string;
   cost: number;
   region: string;
 }
@@ -39,6 +40,7 @@ interface CostChartProps {
 
 interface GroupedService {
   service: string;
+  productCode?: string;
   totalCost: number;
   regions: Array<{
     region: string;
@@ -62,6 +64,7 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
       if (!serviceMap.has(item.service)) {
         serviceMap.set(item.service, {
           service: item.service,
+          productCode: item.productCode,
           totalCost: 0,
           regions: [],
           isExpanded: false
@@ -164,10 +167,12 @@ const CostChart: React.FC<CostChartProps> = ({ data, credentials, isExporting })
     // Find the cost data for the service that was clicked
     const serviceData = groupedServices.find(s => s.service === selectedService);
     const costForService = serviceData ? serviceData.totalCost : 0;
-  
+    const productCodeForService = serviceData?.productCode || selectedService;
+
     return (
       <ServiceResourceDetails
         serviceName={selectedService}
+        productCode={productCodeForService}
         serviceCost={costForService} // Pass the cost to the details component
         credentials={credentials}
         onBack={() => setSelectedService(null)}

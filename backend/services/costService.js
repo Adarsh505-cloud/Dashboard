@@ -479,17 +479,19 @@ export class CostService {
     try {
       const { Start, End } = this.getEffectiveDateRange(1);
       const sql = `
-        SELECT COALESCE(element_at(product, 'product_name'), line_item_product_code, 'Unknown') AS service, product_location AS region,
+        SELECT COALESCE(element_at(product, 'product_name'), line_item_product_code, 'Unknown') AS service,
+               line_item_product_code AS product_code,
+               product_location AS region,
                SUM( COALESCE(line_item_unblended_cost, 0) ) AS total_cost
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
         WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
           ${this.usageOnlyFilter}
           ${this.targetAccountFilter}
-        GROUP BY COALESCE(element_at(product, 'product_name'), line_item_product_code, 'Unknown'), product_location
+        GROUP BY COALESCE(element_at(product, 'product_name'), line_item_product_code, 'Unknown'), line_item_product_code, product_location
         ORDER BY total_cost DESC LIMIT 500;
       `;
       const rows = await this.runAthenaQuery(sql);
-      return rows.map(r => ({ service: this.serviceNameMap[r.service] || r.service || 'Unknown', region: r.region || 'NoRegion', cost: Number(r.total_cost || 0) })).filter(x => x.cost > 0).sort((a,b) => b.cost - a.cost);
+      return rows.map(r => ({ service: this.serviceNameMap[r.service] || r.service || 'Unknown', productCode: r.product_code || r.service, region: r.region || 'NoRegion', cost: Number(r.total_cost || 0) })).filter(x => x.cost > 0).sort((a,b) => b.cost - a.cost);
     } catch (err) { throw err; }
   }
 

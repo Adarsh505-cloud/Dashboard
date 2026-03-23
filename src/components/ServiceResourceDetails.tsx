@@ -37,6 +37,7 @@ interface ResourceDetail {
 
 interface ServiceResourceDetailsProps {
   serviceName: string;
+  productCode?: string;
   serviceCost: number;
   credentials: {
     accountId: string;
@@ -287,7 +288,7 @@ const ResourceCard: React.FC<{ resource: ResourceDetail }> = React.memo(({ resou
 
 // --- MAIN COMPONENT ---
 
-const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ serviceName, serviceCost, credentials, onBack }) => {
+const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ serviceName, productCode, serviceCost, credentials, onBack }) => {
   const [resources, setResources] = useState<ResourceDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -301,7 +302,7 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
       setLoading(true);
       setError(null);
       try {
-        const apiResponse = await apiService.getResourcesForService(credentials, serviceName);
+        const apiResponse = await apiService.getResourcesForService(credentials, productCode || serviceName);
         const normalized = normalizeResourceData(apiResponse, serviceName);
         setResources(normalized);
       } catch (err) {
@@ -380,51 +381,99 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-950 dark:to-gray-900">
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-xl transition-all duration-200 shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Services
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-gray-100">{serviceName} Resources</h1>
-              <p className="text-slate-600 dark:text-gray-400">Loading enhanced resource data from your AWS account...</p>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 relative overflow-hidden">
+        {/* Animated background grid */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(59,130,246,0.5) 1px, transparent 0)',
+            backgroundSize: '40px 40px'
+          }}></div>
+        </div>
+
+        {/* Floating particles */}
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-cyan-500/30 rounded-full animate-pulse"></div>
+        <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-blue-500/20 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-indigo-500/25 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+        <div className="absolute top-1/2 right-1/4 w-1.5 h-1.5 bg-cyan-400/30 rounded-full animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="absolute top-5 left-5 flex items-center gap-2 px-3 py-2 text-cyan-400 hover:text-white hover:bg-white/10 rounded-lg transition-all text-sm z-10"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="hidden sm:inline">Back to Services</span>
+        </button>
+
+        <div className="w-full max-w-sm text-center relative z-10">
+          {/* Animated ring + database icon */}
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto mb-8">
+            <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 opacity-20 blur-lg animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-gray-700"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-blue-500 animate-spin" style={{ animationDuration: '2s' }}></div>
+            <div className="absolute inset-3 rounded-full border-2 border-gray-800"></div>
+            <div className="absolute inset-3 rounded-full border-2 border-transparent border-b-indigo-400 border-l-cyan-500 animate-spin" style={{ animationDuration: '3s', animationDirection: 'reverse' }}></div>
+            <div className="absolute inset-5 rounded-full bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <Database className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700 p-12 text-center">
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <Loader className="w-10 h-10 text-blue-600 animate-spin" />
-              <h2 className="text-2xl font-semibold text-slate-800 dark:text-gray-200">Analyzing Resources</h2>
-            </div>
-            <p className="text-slate-600 dark:text-gray-400 mb-8 text-lg">
-              Correlating cost data with CloudTrail events to identify owners and lifecycles...
-            </p>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-xl p-6 text-left max-w-2xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700 dark:text-gray-300">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Connecting to Cost and Usage Reports</span>
+
+          {/* Title */}
+          <h2 className="text-xl sm:text-2xl font-bold mb-2">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+              Analyzing Resources
+            </span>
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-400 mb-10 font-mono truncate px-4">
+            {serviceName}
+          </p>
+
+          {/* Progress steps */}
+          <div className="space-y-3 sm:space-y-4 text-left max-w-xs mx-auto mb-10 px-2">
+            {[
+              'Querying Cost and Usage Reports',
+              'Correlating CloudTrail creation events',
+              'Correlating CloudTrail deletion events',
+              'Extracting resource metadata and tags',
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs sm:text-sm">
+                <div className="relative w-5 h-5 shrink-0">
+                  <div className="absolute inset-0 rounded-full border-2 border-cyan-500/40"></div>
+                  <div
+                    className="absolute inset-[3px] rounded-full bg-cyan-400 animate-pulse"
+                    style={{ animationDelay: `${i * 400}ms`, animationDuration: '1.5s' }}
+                  ></div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                  <span>Querying CloudTrail for creation events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                  <span>Querying CloudTrail for deletion events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-                  <span>Extracting resource metadata and tags</span>
-                </div>
+                <span className="text-gray-300">{step}</span>
               </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full max-w-xs mx-auto px-2">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 rounded-full"
+                style={{
+                  animation: 'resourceProgressBar 8s ease-in-out infinite',
+                  width: '0%',
+                }}
+              ></div>
             </div>
+            <p className="text-xs text-gray-500 mt-3 tracking-wide">Processing...</p>
           </div>
         </div>
+
+        <style>{`
+          @keyframes resourceProgressBar {
+            0% { width: 5%; }
+            20% { width: 25%; }
+            40% { width: 45%; }
+            60% { width: 65%; }
+            80% { width: 85%; }
+            100% { width: 95%; }
+          }
+        `}</style>
       </div>
     );
   }
