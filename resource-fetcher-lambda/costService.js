@@ -1,5 +1,6 @@
 // resource-fetcher-lambda/costService.js
 import { AthenaClient, StartQueryExecutionCommand, GetQueryExecutionCommand, GetQueryResultsCommand } from "@aws-sdk/client-athena";
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 
 export class CostService {
@@ -7,7 +8,7 @@ export class CostService {
     this.accountId = String(accountId).trim();
     this.roleArn = String(roleArn).trim();
     this.region = process.env.ATHENA_REGION || 'us-east-1';
-    
+
     const rawBucket = `s3://cost-analyzer-results-${this.accountId}-${this.region}/`;
     this.athenaOutput = process.env.ATHENA_OUTPUT_S3 || rawBucket.toLowerCase();
 
@@ -19,6 +20,7 @@ export class CostService {
     this.ATHENA_POLL_MS = Number(process.env.ATHENA_POLL_MS || 22000);
     this.ATHENA_POLL_INTERVAL_MS = Number(process.env.ATHENA_POLL_INTERVAL_MS || 1500);
     this.START_RETRY_MAX = Number(process.env.START_RETRY_MAX || 3);
+    this.CACHE_TTL_MS = 8 * 60 * 60 * 1000; // 8 Hours
 
     this.serviceNameMap = {
       'AmazonEC2': 'EC2', 'AmazonVPC': 'VPC', 'AmazonRDS': 'RDS',
@@ -164,7 +166,7 @@ export class CostService {
     const out = new Map();
     if (!resourceIds || resourceIds.length === 0) return out;
     const chunks = this.chunkArray(resourceIds, this.bulkChunkSize);
-    
+
     for (const chunk of chunks) {
       const vals = this.safeValuesForIds(chunk);
       const sql = `
@@ -178,7 +180,7 @@ export class CostService {
         const res = await this.runAthenaQuery(sql);
         if (res.state === 'FAILED' && res.reason && (res.reason.includes('TABLE_NOT_FOUND') || res.reason.includes('does not exist'))) {
             console.warn('[costService] resource_creation_map table missing. Skipping all creation events.');
-            break; 
+            break;
         }
         if (res.state === 'SUCCEEDED' && Array.isArray(res.rows)) {
           res.rows.forEach(r => {
@@ -198,7 +200,7 @@ export class CostService {
     const out = new Map();
     if (!resourceIds || resourceIds.length === 0) return out;
     const chunks = this.chunkArray(resourceIds, this.bulkChunkSize);
-    
+
     for (const chunk of chunks) {
       const vals = this.safeValuesForIds(chunk);
       const sql = `
@@ -212,7 +214,7 @@ export class CostService {
         const res = await this.runAthenaQuery(sql);
         if (res.state === 'FAILED' && res.reason && (res.reason.includes('TABLE_NOT_FOUND') || res.reason.includes('does not exist'))) {
             console.warn('[costService] resource_deletion_map table missing. Skipping all deletion events.');
-            break; 
+            break;
         }
         if (res.state === 'SUCCEEDED' && Array.isArray(res.rows)) {
           res.rows.forEach(r => {
@@ -229,6 +231,26 @@ export class CostService {
   }
 
   async getResourcesForService(serviceName, targetAccountId = null) {
+    const credentials = await this.getCredentials();
+    const bucketName = this.athenaOutput.toLowerCase().replace(/['"]/g, '').trim().replace('s3://', '').split('/')[0];
+    const safeServiceName = serviceName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cacheKey = `dashboard-cache/resources_${this.accountId}_${targetAccountId || 'master'}_${safeServiceName}.json`;
+
+    const s3 = new S3Client({ region: this.region, credentials });
+
+    // 1. TRY S3 CACHE FIRST
+    try {
+      const getRes = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: cacheKey }));
+      const age = Date.now() - getRes.LastModified.getTime();
+      if (age < this.CACHE_TTL_MS) {
+        console.log(`[Cache] HIT for ${cacheKey}`);
+        return JSON.parse(await getRes.Body.transformToString());
+      }
+    } catch (e) {
+      console.log(`[Cache] MISS/EXPIRED for ${cacheKey}`);
+    }
+
+    // 2. CACHE MISS - FETCH FROM ATHENA
     try {
       const { Start, End } = this.getDateRange(1);
       const candidateCodes = new Set([serviceName]);
@@ -238,20 +260,21 @@ export class CostService {
       const codesArr = Array.from(candidateCodes).map(c => `'${c.replace(/'/g, "''")}'`).join(',');
       const targetAccountFilter = targetAccountId ? `AND line_item_usage_account_id = '${String(targetAccountId).replace(/'/g, "''")}'` : '';
 
-      // FIXED: Adding line_item_usage_type aggregation to see exactly why it's being billed
       let sql = `
         SELECT
             line_item_usage_account_id,
-            line_item_resource_id, 
-            COALESCE(line_item_product_code, 'Unknown') AS product_code, 
+            line_item_resource_id,
+            COALESCE(line_item_product_code, 'Unknown') AS product_code,
             product_location,
-            SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost, 
+            SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
             MAX(element_at(resource_tags, 'user:Owner')) AS owner_tag,
             MAX(element_at(resource_tags, 'user:Project')) AS project_tag,
-            array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
+            array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types,
+            CAST(MAX(date(line_item_usage_start_date)) AS VARCHAR) AS last_seen_date,
+            CAST(MIN(date(line_item_usage_start_date)) AS VARCHAR) AS first_seen_date
         FROM ${this.athenaDatabase}.${this.athenaCurTable}
         WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
-          AND line_item_resource_id IS NOT NULL 
+          AND line_item_resource_id IS NOT NULL
           AND TRIM(line_item_resource_id) <> ''
           AND COALESCE(line_item_product_code, 'Unknown') IN (${codesArr})
           ${targetAccountFilter}
@@ -261,20 +284,22 @@ export class CostService {
 
       let baseRes = await this.runAthenaQuery(sql);
 
-      // Fallback Attempt
+      // Fallback if tags column is missing
       if (baseRes.state === 'FAILED' && baseRes.reason && (baseRes.reason.includes('COLUMN_NOT_FOUND') || baseRes.reason.includes('TABLE_NOT_FOUND') || baseRes.reason.includes('cannot be resolved'))) {
         console.warn(`[costService] resource_tags column missing! Executing fallback query...`);
         sql = `
           SELECT
               line_item_usage_account_id,
-              line_item_resource_id, 
-              COALESCE(line_item_product_code, 'Unknown') AS product_code, 
+              line_item_resource_id,
+              COALESCE(line_item_product_code, 'Unknown') AS product_code,
               product_location,
               SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost,
-              array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types
+              array_join(array_agg(DISTINCT COALESCE(CAST(line_item_usage_type AS VARCHAR), 'Unknown')), ', ') AS usage_types,
+              CAST(MAX(date(line_item_usage_start_date)) AS VARCHAR) AS last_seen_date,
+              CAST(MIN(date(line_item_usage_start_date)) AS VARCHAR) AS first_seen_date
           FROM ${this.athenaDatabase}.${this.athenaCurTable}
           WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'
-            AND line_item_resource_id IS NOT NULL 
+            AND line_item_resource_id IS NOT NULL
             AND TRIM(line_item_resource_id) <> ''
             AND COALESCE(line_item_product_code, 'Unknown') IN (${codesArr})
             ${targetAccountFilter}
@@ -287,7 +312,7 @@ export class CostService {
       if (!baseRes.finished && baseRes.queryExecutionId) {
         return [];
       }
-      
+
       const rows = baseRes.rows || [];
       const resourceIds = rows.map(r => r.line_item_resource_id).filter(Boolean);
 
@@ -296,7 +321,11 @@ export class CostService {
         this.getDeletionEventsForResources(resourceIds)
       ]);
 
-      return rows.map(r => {
+      // Determine today's date for "last seen" comparison (2-day threshold)
+      const todayStr = new Date().toISOString().split('T')[0];
+      const oneDayAgo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const finalResult = rows.map(r => {
         const c = creationMap.get(r.line_item_resource_id) || {};
         const d = deletionMap.get(r.line_item_resource_id) || {};
 
@@ -304,9 +333,15 @@ export class CostService {
         if (r.owner_tag) tags.push({ key: 'user_owner', value: r.owner_tag });
         if (r.project_tag) tags.push({ key: 'user_project', value: r.project_tag });
 
-        const owner = r.owner_tag || c.createdBy || 'Unknown';
-        const project = r.project_tag || 'Unassigned';
-        const status = d.deletionDate ? 'terminated' : 'running';
+        // Infer status from CUR last_seen_date (more reliable than CloudTrail)
+        // Priority: 1) CloudTrail deletion → terminated, 2) last_seen > 1 day ago → likely_terminated, 3) active
+        const lastSeen = r.last_seen_date || null;
+        let status = 'running';
+        if (d.deletionDate) {
+          status = 'terminated';
+        } else if (lastSeen && lastSeen < oneDayAgo) {
+          status = 'likely_terminated';
+        }
 
         return {
           accountId: r.line_item_usage_account_id || 'Unknown',
@@ -314,20 +349,38 @@ export class CostService {
           name: r.line_item_resource_id,
           type: this.serviceNameMap[r.product_code] || r.product_code,
           region: r.product_location || 'unknown',
-          owner,
-          project,
+          owner: r.owner_tag || c.createdBy || 'Unknown',
+          project: r.project_tag || 'Unassigned',
           createdDate: c.createdDate || null,
           createdBy: c.createdBy || null,
           status,
+          lastSeenDate: lastSeen,
+          firstSeenDate: r.first_seen_date || null,
           deletionDate: d.deletionDate || null,
           deletedBy: d.deletedBy || null,
           cost: Number(r.total_cost || 0),
-          usageTypes: r.usage_types || 'Unknown', // FIXED: Provide to frontend
+          usageTypes: r.usage_types || 'Unknown',
           tags,
           specifications: {}
         };
       });
+
+      // 3. WRITE TO S3 CACHE
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket: bucketName,
+          Key: cacheKey,
+          Body: JSON.stringify(finalResult),
+          ContentType: 'application/json'
+        }));
+        console.log(`[Cache] SAVED fresh data to ${cacheKey}`);
+      } catch (err) {
+        console.warn(`[Cache] Failed to save resource cache:`, err.message);
+      }
+
+      return finalResult;
     } catch (err) {
+      console.error(err);
       return [];
     }
   }

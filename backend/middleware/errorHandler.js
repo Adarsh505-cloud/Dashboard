@@ -1,16 +1,20 @@
 export const errorHandler = (error, req, res, next) => {
-  // Enhanced logging for CloudWatch: Log the full error object and request details
+  // Log error details for CloudWatch — strip Authorization header to avoid leaking tokens
+  const safeHeaders = { ...req.headers };
+  delete safeHeaders.authorization;
+  delete safeHeaders.cookie;
+
   console.error('[ERROR HANDLER] Caught an exception:', JSON.stringify({
     error: {
       message: error.message,
       name: error.name,
-      stack: error.stack,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     },
     request: {
       method: req.method,
       url: req.originalUrl,
       body: req.body,
-      headers: req.headers,
+      headers: safeHeaders,
     }
   }, null, 2));
 
@@ -129,13 +133,12 @@ export const errorHandler = (error, req, res, next) => {
   // Default error response
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
       : error.message,
     code: 'INTERNAL_ERROR',
     suggestion: 'If this error persists, please check the server logs for more details.',
     details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    // Add request ID for easier log tracing in CloudWatch
-    requestId: req.apiGateway ? req.apiGateway.context.awsRequestId : 'unknown',
+    requestId: req.apiGateway ? req.apiGateway.context.awsRequestId : undefined,
   });
 };

@@ -51,7 +51,7 @@ interface WeeklyCostData {
 // Add all missing properties here.
 export interface ApiData {
   totalMonthlyCost: number;
-  serviceCosts: Array<{ service: string; cost: number; region: string }>;
+  serviceCosts: Array<{ service: string; productCode?: string; cost: number; region: string }>;
   regionCosts: Array<{ region: string; cost: number }>;
   userCosts: Array<{ user: string; cost: number; resources: number; resourcesList: string[] | null | string; }>;
   resourceCosts: Array<{ type: string; cost: number; trend: number[]; count: number }>;
@@ -74,8 +74,7 @@ export interface ApiData {
   topResources?: TopSpendingResource[];
   top_resources?: TopSpendingResource[];
   linkedAccountsSummary?: Array<{ accountId: string; accountName?: string; cost: number }>;
-  // FIXED: Added carbon footprint type
-  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>; 
+  carbonFootprint?: Array<{ region: string; emissions: number; count: number }>;
 }
 
 interface UseApiDataResult {
@@ -97,13 +96,14 @@ const emptyData: ApiData = {
 
 export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult => {
   const [data, setData] = useState<ApiData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start true to avoid error flash on first render
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!credentials) {
       console.log('📝 No credentials provided');
       setData(emptyData);
+      setLoading(false);
       return;
     }
 
@@ -145,15 +145,20 @@ export const useApiData = (credentials: ApiCredentials | null): UseApiDataResult
       console.error('❌ Failed to fetch API data:', errorMessage);
       
       setError(errorMessage);
-      setData(emptyData);
+      setData(null);
     } finally {
       setLoading(false);
     }
   };
 
+  // Use a stable key to avoid refetching when the object reference changes but values are the same
+  const credentialsKey = credentials
+    ? `${credentials.accountId}|${credentials.roleArn}|${credentials.accountType || ''}|${credentials.targetAccountId || ''}|${credentials.startDate || ''}|${credentials.endDate || ''}`
+    : '';
+
   useEffect(() => {
     fetchData();
-  }, [credentials]);
+  }, [credentialsKey]);
 
   return {
     data,

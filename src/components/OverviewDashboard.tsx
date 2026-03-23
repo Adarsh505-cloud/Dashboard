@@ -243,104 +243,104 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
 
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
         {/* Total Cost */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-blue-100">
               {trendInfo.percentage >= 0 ? (
-                <TrendingUp className="w-4 h-4" />
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
               ) : (
-                <TrendingDown className="w-4 h-4" />
+                <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
               )}
-              <span className="text-sm">
+              <span className="text-xs sm:text-sm">
                 {trendInfo.percentage >= 0 ? '+' : ''}{trendInfo.percentage.toFixed(1)}%
               </span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${data.totalMonthlyCost.toLocaleString()}</div>
-          <div className="text-blue-100 text-sm">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">${data.totalMonthlyCost.toLocaleString()}</div>
+          <div className="text-blue-100 text-xs sm:text-sm">
             {monthInfo.monthName} (Day {monthInfo.currentDay}/{monthInfo.daysInMonth})
           </div>
-          <div className="text-blue-200 text-xs mt-1">
+          <div className="text-blue-200 text-[10px] sm:text-xs mt-1 hidden sm:block">
             {trendInfo.comparison} • {monthInfo.monthProgress}% through month
           </div>
         </div>
 
         {/* Potential Savings */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <TrendingDown className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <TrendingDown className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-green-100">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm">{highPriorityRecommendations} high</span>
+              <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">{highPriorityRecommendations} high</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">${totalPotentialSavings.toLocaleString()}</div>
-          <div className="text-green-100">Potential Savings</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">${totalPotentialSavings.toLocaleString()}</div>
+          <div className="text-green-100 text-xs sm:text-sm">Potential Savings</div>
         </div>
 
         {/* Active Resources */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <Server className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <Server className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-purple-100">
-              <Activity className="w-4 h-4" />
-              <span className="text-sm">Active</span>
+              <Activity className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">Active</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{totalResources.toLocaleString()}</div>
-          <div className="text-purple-100">Resources</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">{totalResources.toLocaleString()}</div>
+          <div className="text-purple-100 text-xs sm:text-sm">Resources</div>
         </div>
 
         {/* Active Projects */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <FolderOpen className="w-6 h-6" />
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 text-white shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-lg sm:rounded-xl">
+              <FolderOpen className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-1 text-orange-100">
-              <Users className="w-4 h-4" />
-              <span className="text-sm">{data.userCosts.length} users</span>
+              <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="text-xs sm:text-sm">{data.userCosts.length} users</span>
             </div>
           </div>
-          <div className="text-3xl font-bold mb-1">{totalProjects}</div>
-          <div className="text-orange-100">Projects</div>
+          <div className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1">{totalProjects}</div>
+          <div className="text-orange-100 text-xs sm:text-sm">Projects</div>
         </div>
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
         {/* MODIFIED: Cost Trend Chart */}
-        <div className="xl:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Cost Trend (Last 30 Days)</h3>
-              <p className="text-gray-500">
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Cost Trend (Last 30 Days)</h3>
+              <p className="text-gray-500 dark:text-gray-400">
               </p>
             </div>
-            <div className="p-2 bg-blue-100 rounded-lg">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
               <BarChart3 className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-48 sm:h-56 lg:h-64">
             <Line data={trendData} options={lineChartOptions} />
           </div>
           <div className="mt-4 flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-              <span className="text-gray-600">Daily Cost</span>
+              <span className="text-gray-600 dark:text-gray-400">Daily Cost</span>
             </div>
-            <div className="text-gray-500">
+            <div className="text-gray-500 dark:text-gray-400">
               {data.costTrendData ? 'Last 30 days from Daily CUR Data' : 'Last 6 months'}
             </div>
           </div>
@@ -352,13 +352,13 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
 
 
         {/* Top Services */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Top Services</h3>
-              <p className="text-gray-500"> </p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Top Services</h3>
+              <p className="text-gray-500 dark:text-gray-400"> </p>
             </div>
-            <div className="p-2 bg-green-100 rounded-lg">
+            <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
               <PieChart className="w-5 h-5 text-green-600" />
             </div>
           </div>
@@ -373,11 +373,11 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: colors[index] }}
                   />
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {service.service.replace('Amazon ', '').replace(' Service', '')}
                   </span>
                 </div>
-                <span className="text-sm font-bold text-gray-900">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                   ${service.cost.toLocaleString()}
                 </span>
               </div>
@@ -387,17 +387,17 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
       </div>
 
       {/* Detailed Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
         {/* Regional Distribution */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Regional Distribution</h3>
-              <p className="text-gray-500">
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Regional Distribution</h3>
+              <p className="text-gray-500 dark:text-gray-400">
                 {monthInfo.monthName} costs by AWS region (through day {monthInfo.currentDay})
               </p>
             </div>
-            <div className="p-2 bg-purple-100 rounded-lg">
+            <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
               <Globe className="w-5 h-5 text-purple-600" />
             </div>
           </div>
@@ -412,14 +412,14 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
                         className="w-4 h-4 rounded-full"
                         style={{ backgroundColor: colors[index % colors.length] }}
                       />
-                      <span className="font-medium text-gray-900">{region.region}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{region.region}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-gray-900">${region.cost.toLocaleString()}</div>
-                      <div className="text-sm text-gray-500">{percentage.toFixed(1)}%</div>
+                      <div className="font-bold text-gray-900 dark:text-gray-100">${region.cost.toLocaleString()}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">{percentage.toFixed(1)}%</div>
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div 
                       className="h-2 rounded-full transition-all duration-300"
                       style={{ 
@@ -432,8 +432,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
               );
             })}
           </div>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <div className="text-sm text-blue-700">
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+            <div className="text-sm text-blue-700 dark:text-blue-400">
               <strong>Note:</strong> Costs shown are for {monthInfo.monthName} through day {monthInfo.currentDay} 
               ({monthInfo.monthProgress}% of month completed)
             </div>
@@ -441,58 +441,58 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
         </div>
 
         {/* Quick Insights */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Quick Insights</h3>
-              <p className="text-gray-500">Key findings and recommendations</p>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Quick Insights</h3>
+              <p className="text-gray-500 dark:text-gray-400">Key findings and recommendations</p>
             </div>
-            <div className="p-2 bg-yellow-100 rounded-lg">
+            <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
               <Zap className="w-5 h-5 text-yellow-600" />
             </div>
           </div>
           <div className="space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center gap-3 mb-2">
                 {trendInfo.percentage >= 0 ? (
                   <TrendingUp className="w-5 h-5 text-blue-600" />
                 ) : (
                   <TrendingDown className="w-5 h-5 text-blue-600" />
                 )}
-                <span className="font-medium text-blue-800">Cost Trend</span>
+                <span className="font-medium text-blue-800 dark:text-blue-300">Cost Trend</span>
               </div>
-              <p className="text-blue-700 text-sm">
+              <p className="text-blue-700 dark:text-blue-400 text-sm">
                 Your costs are {trendInfo.percentage >= 0 ? 'trending up' : 'trending down'} by {Math.abs(trendInfo.percentage).toFixed(1)}% 
                 compared to the same period last month.
               </p>
             </div>
 
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
               <div className="flex items-center gap-3 mb-2">
                 <TrendingDown className="w-5 h-5 text-green-600" />
-                <span className="font-medium text-green-800">Savings Opportunity</span>
+                <span className="font-medium text-green-800 dark:text-green-300">Savings Opportunity</span>
               </div>
-              <p className="text-green-700 text-sm">
+              <p className="text-green-700 dark:text-green-300 text-sm">
                 You could save ${totalPotentialSavings.toLocaleString()} monthly by implementing our {data.recommendations.length} optimization recommendations.
               </p>
             </div>
 
-            <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="p-4 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
               <div className="flex items-center gap-3 mb-2">
                 <Globe className="w-5 h-5 text-purple-600" />
-                <span className="font-medium text-purple-800">Regional Focus</span>
+                <span className="font-medium text-purple-800 dark:text-purple-300">Regional Focus</span>
               </div>
-              <p className="text-purple-700 text-sm">
+              <p className="text-purple-700 dark:text-purple-300 text-sm">
                 {filteredRegionCosts[0]?.region} accounts for {((filteredRegionCosts[0]?.cost / data.totalMonthlyCost) * 100).toFixed(1)}% of your total costs this month.
               </p>
             </div>
 
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div className="p-4 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
               <div className="flex items-center gap-3 mb-2">
                 <AlertTriangle className="w-5 h-5 text-orange-600" />
-                <span className="font-medium text-orange-800">Month Progress</span>
+                <span className="font-medium text-orange-800 dark:text-orange-300">Month Progress</span>
               </div>
-              <p className="text-orange-700 text-sm">
+              <p className="text-orange-700 dark:text-orange-300 text-sm">
                 You're {monthInfo.monthProgress}% through {monthInfo.monthName.split(' ')[0]}. 
                 {monthInfo.monthProgress > 10 ? 
                   `At this rate, projected monthly cost: $${Math.round((data.totalMonthlyCost / monthInfo.monthProgress) * 100).toLocaleString()}` :

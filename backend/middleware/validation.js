@@ -1,36 +1,44 @@
 import Joi from 'joi';
 
+const accountIdField = Joi.string()
+  .pattern(/^\d{12}$/)
+  .messages({
+    'string.pattern.base': 'Account ID must be exactly 12 digits',
+    'any.required': 'Account ID is required'
+  });
+
+const roleArnField = Joi.string()
+  .pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/)
+  .messages({
+    'string.pattern.base': 'Invalid IAM Role ARN format',
+    'any.required': 'Role ARN is required'
+  });
+
+const dateField = Joi.string()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+  .messages({
+    'string.pattern.base': 'Date must be in YYYY-MM-DD format',
+  });
+
 const credentialsSchema = Joi.object({
-  accountId: Joi.string()
-    .pattern(/^\d{12}$/)
-    .required()
-    .messages({
-      'string.pattern.base': 'Account ID must be exactly 12 digits',
-      'any.required': 'Account ID is required'
-    }),
-  roleArn: Joi.string()
-    .pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/)
-    .required()
-    .messages({
-      'string.pattern.base': 'Invalid IAM Role ARN format',
-      'any.required': 'Role ARN is required'
-    })
+  accountId: accountIdField.required(),
+  roleArn: roleArnField.required(),
+  targetAccountId: accountIdField.optional().allow(null, ''),
+  accountType: Joi.string().valid('standalone', 'master').optional(),
+  startDate: dateField.optional().allow(null, ''),
+  endDate: dateField.optional().allow(null, ''),
 });
 
-// Add this new schema below the credentialsSchema
 const resourceRequestSchema = Joi.object({
-  accountId: Joi.string()
-    .pattern(/^\d{12}$/)
-    .required(),
-  roleArn: Joi.string()
-    .pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@-]+$/)
-    .required(),
-  serviceName: Joi.string().required()
+  accountId: accountIdField.required(),
+  roleArn: roleArnField.required(),
+  serviceName: Joi.string().required(),
+  targetAccountId: accountIdField.optional().allow(null, ''),
 });
 
-export const validateCredentials = (req, res, next) => {
-  const { error, value } = credentialsSchema.validate(req.body);
-  
+const validateWithSchema = (schema) => (req, res, next) => {
+  const { error } = schema.validate(req.body, { allowUnknown: true });
+
   if (error) {
     return res.status(400).json({
       success: false,
@@ -41,26 +49,9 @@ export const validateCredentials = (req, res, next) => {
       }))
     });
   }
-  
-  req.body = value;
+
   next();
 };
 
-// Add this new middleware function at the end of the file
-export const validateResourceRequest = (req, res, next) => {
-  const { error, value } = resourceRequestSchema.validate(req.body);
-  
-  if (error) {
-    return res.status(400).json({
-      success: false,
-      error: 'Validation failed',
-      details: error.details.map(detail => ({
-        field: detail.path.join('.'),
-        message: detail.message
-      }))
-    });
-  }
-  
-  req.body = value;
-  next();
-};
+export const validateCredentials = validateWithSchema(credentialsSchema);
+export const validateResourceRequest = validateWithSchema(resourceRequestSchema);

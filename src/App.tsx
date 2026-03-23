@@ -29,7 +29,7 @@ function App() {
 
   if (auth.isLoading && !isLocalDev) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-gray-700">
+      <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 dark:text-gray-300">
         <Loader className="w-12 h-12 animate-spin mb-4" />
         <p className="text-lg">Loading session...</p>
       </div>
@@ -38,7 +38,7 @@ function App() {
 
   if (auth.error && !isLocalDev) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-red-700">
+      <div className="min-h-screen flex flex-col items-center justify-center text-red-700 dark:text-red-300">
         <AlertCircle className="w-12 h-12 mb-4" />
         <p className="text-lg font-semibold">Authentication Error</p>
         <p>{auth.error.message}</p>
@@ -56,10 +56,10 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-950">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">Welcome to the Cost Analysis Dashboard</h1>
-        <p className="text-gray-600 mb-8">Please sign in to continue.</p>
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-200 mb-4">Welcome to the Cost Analysis Dashboard</h1>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">Please sign in to continue.</p>
         <button
           onClick={() => auth.signinRedirect()}
           className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

@@ -71,13 +71,13 @@ const parseJSONSafe = (text?: string | null) => {
 const getSeverityClass = (s?: string | null) => {
   switch ((s || "").toLowerCase()) {
     case "high":
-      return "bg-red-50 text-red-800 border-red-100";
+      return "bg-red-50 text-red-800 border-red-100 dark:bg-red-950 dark:text-red-300 dark:border-red-800";
     case "medium":
-      return "bg-amber-50 text-amber-800 border-amber-100";
+      return "bg-amber-50 text-amber-800 border-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800";
     case "low":
-      return "bg-sky-50 text-sky-800 border-sky-100";
+      return "bg-sky-50 text-sky-800 border-sky-100 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800";
     default:
-      return "bg-gray-50 text-gray-800 border-gray-100";
+      return "bg-gray-50 text-gray-800 border-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700";
   }
 };
 
@@ -229,43 +229,43 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
   const toggleGroup = (group: string) => setCollapsedGroups((s) => ({ ...s, [group]: !s[group] }));
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow">
-            <div className="text-sm">Potential Monthly Savings</div>
-            <div className="text-xl font-semibold">{formatCurrency(totalSavings)}</div>
+    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+      <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow">
+            <div className="text-xs sm:text-sm">Potential Monthly Savings</div>
+            <div className="text-lg sm:text-xl font-semibold">{formatCurrency(totalSavings)}</div>
           </div>
-          <div className="flex items-center gap-2 bg-white border rounded-lg px-3 py-2 shadow-sm">
-            <span className="text-sm font-medium text-gray-700 mr-2">Priority</span>
+          <div className="flex items-center gap-1 sm:gap-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm overflow-x-auto">
+            <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mr-1 sm:mr-2 shrink-0">Priority</span>
             {(["all", "high", "medium", "low"] as const).map((p) => (
-              <button key={p} onClick={() => setPriorityFilter(p)} className={`px-3 py-1 rounded-md text-sm ${priorityFilter === p ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`} aria-pressed={priorityFilter === p}>
+              <button key={p} onClick={() => setPriorityFilter(p)} className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm shrink-0 ${priorityFilter === p ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`} aria-pressed={priorityFilter === p}>
                 {p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
           </div>
         </div>
-        <div className="text-sm text-gray-600">Showing <strong>{filtered.length}</strong> of <strong>{items.length}</strong> recommendations</div>
+        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Showing <strong>{filtered.length}</strong> of <strong>{items.length}</strong> recommendations</div>
       </div>
       {(["Compute Optimizer", "Billing & Cost Management", "Other"] as const).map((groupName) => {
         const list = grouped[groupName] || [];
         const collapsed = !!collapsedGroups[groupName];
         return (
-          <section key={groupName} className="bg-white rounded-2xl shadow border border-gray-100 overflow-hidden">
-            <div className="p-4 flex items-center justify-between border-b">
+          <section key={groupName} className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="p-3 sm:p-4 flex items-center justify-between border-b dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <button onClick={() => toggleGroup(groupName)} aria-expanded={!collapsed} className="p-1 rounded hover:bg-gray-50">
-                  {collapsed ? <ChevronRight className="w-5 h-5 text-gray-600" /> : <ChevronDown className="w-5 h-5 text-gray-600" />}
+                <button onClick={() => toggleGroup(groupName)} aria-expanded={!collapsed} className="p-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                  {collapsed ? <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
                 </button>
-                <h3 className="text-lg font-semibold text-gray-900">{groupName}</h3>
-                <div className="text-sm text-gray-500">({list.length})</div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{groupName}</h3>
+                <div className="text-sm text-gray-500 dark:text-gray-400">({list.length})</div>
               </div>
-              <div className="text-sm text-gray-600">{list.length > 0 ? `Savings: ${formatCurrency(list.reduce((s, r) => s + Number(r?.potentialSavings ?? 0), 0))}` : "No recommendations"}</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">{list.length > 0 ? `Savings: ${formatCurrency(list.reduce((s, r) => s + Number(r?.potentialSavings ?? 0), 0))}` : "No recommendations"}</div>
             </div>
             {!collapsed && (
               <div>
-                {list.length === 0 ? <div className="p-8 text-center text-gray-600">No recommendations in this category.</div> : (
-                  <div className="divide-y">
+                {list.length === 0 ? <div className="p-8 text-center text-gray-600 dark:text-gray-400">No recommendations in this category.</div> : (
+                  <div className="divide-y dark:divide-gray-700">
                     {list.map((rec) => {
                       if (!rec.id) return null; // Safety guard for missing ID
                       const title = rec.resource ?? rec.id ?? "Recommendation";
@@ -278,40 +278,40 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
                       const ebsUpgrade = parsed ? detectEbsUpgrade(parsed) : null;
                       const showUpgradeMessage = ebsUpgrade?.recommended;
                       return (
-                        <div key={rec.id} className="p-6 flex gap-4 items-start hover:bg-gray-50 transition-colors">
-                          <div className="flex-shrink-0 mt-1"><div className="w-10 h-10 rounded-lg bg-gray-50 border flex items-center justify-center">{getTypeIcon(rec.type)}</div></div>
+                        <div key={rec.id} className="p-3 sm:p-4 lg:p-6 flex gap-3 sm:gap-4 items-start hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <div className="flex-shrink-0 mt-1 hidden sm:block"><div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 flex items-center justify-center">{getTypeIcon(rec.type)}</div></div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-3">
-                                  <h4 className="text-base font-semibold text-gray-900 truncate">{title}</h4>
-                                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${getSeverityClass(rec.severity)}`}>{(rec.severity || "low").toUpperCase()}</span>
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                              <div className="min-w-0 w-full sm:w-auto">
+                                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[200px] sm:max-w-none">{title}</h4>
+                                  <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded ${getSeverityClass(rec.severity)}`}>{(rec.severity || "low").toUpperCase()}</span>
                                 </div>
-                                <div className="text-sm text-gray-600 mt-2 max-w-3xl">
-                                  {showUpgradeMessage ? <div className="text-sm text-gray-700"><strong>Recommendation:</strong> {ebsUpgrade.message}</div> : (isExpanded ? summary : (typeof summary === "string" ? `${summary.slice(0, 340)}${summary.length > 340 ? '...' : ''}` : summary))}
+                                <div className="text-sm text-gray-600 dark:text-gray-400 mt-2 max-w-3xl">
+                                  {showUpgradeMessage ? <div className="text-sm text-gray-700 dark:text-gray-300"><strong>Recommendation:</strong> {ebsUpgrade.message}</div> : (isExpanded ? summary : (typeof summary === "string" ? `${summary.slice(0, 340)}${summary.length > 340 ? '...' : ''}` : summary))}
                                 </div>
-                                <div className="mt-3 flex items-center gap-3 text-sm text-gray-500">
+                                <div className="mt-3 flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
                                   {isLong && !showUpgradeMessage && (
-                                    <button onClick={() => setExpanded((p) => ({ ...p, [rec.id]: !p[rec.id] }))} className="text-sky-600 hover:underline flex items-center gap-1">
+                                    <button onClick={() => setExpanded((p) => ({ ...p, [rec.id]: !p[rec.id] }))} className="text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1">
                                       <Eye className="w-4 h-4" /> {isExpanded ? "Show less" : "Show more"}
                                     </button>
                                   )}
-                                  {parsed && <button onClick={() => setModalItem(rec)} className="text-sky-600 hover:underline flex items-center gap-1"><BarChart2 className="w-4 h-4" /> Details</button>}
-                                  <button onClick={() => copyToClipboard(JSON.stringify(rec.__raw ?? rec, null, 2), rec.id)} className="text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                                  {parsed && <button onClick={() => setModalItem(rec)} className="text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1"><BarChart2 className="w-4 h-4" /> Details</button>}
+                                  <button onClick={() => copyToClipboard(JSON.stringify(rec.__raw ?? rec, null, 2), rec.id)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1">
                                     <Copy className="w-4 h-4" /> {copied[rec.id] ? <span className="text-xs text-green-600">Copied!</span> : <span className="text-xs">Copy raw</span>}
                                   </button>
                                 </div>
-                                <div className="text-xs text-gray-400 mt-3">Last refreshed: {formatDate(rec.lastActivity)}</div>
+                                <div className="text-xs text-gray-400 dark:text-gray-500 mt-3">Last refreshed: {formatDate(rec.lastActivity)}</div>
                               </div>
-                              <div className="flex-shrink-0 text-right">
-                                <div className="text-green-600 font-semibold text-xl">{formatCurrency(savings)}</div>
-                                {cost > 0 && <div className="text-xs text-gray-500">of {formatCurrency(cost)} cost</div>}
-                                {cost > 0 && <div className="mt-3 w-40 bg-gray-100 rounded-full h-2 overflow-hidden"><div className="h-2 bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (savings / cost) * 100)}%` }} /></div>}
+                              <div className="flex-shrink-0 text-left sm:text-right">
+                                <div className="text-green-600 font-semibold text-base sm:text-xl">{formatCurrency(savings)}</div>
+                                {cost > 0 && <div className="text-xs text-gray-500 dark:text-gray-400">of {formatCurrency(cost)} cost</div>}
+                                {cost > 0 && <div className="mt-3 w-40 bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden"><div className="h-2 bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (savings / cost) * 100)}%` }} /></div>}
                                 <div className="mt-4 flex flex-col gap-2 items-end">
                                   <button onClick={() => console.info("action", rec.id)} className="text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
                                     <CheckCircle className="w-4 h-4" /> {rec.action ?? "Apply"}
                                   </button>
-                                  {rec.id && <button onClick={() => copyToClipboard(rec.id, rec.id)} className="text-xs text-gray-500 hover:underline mt-1">Copy ID</button>}
+                                  {rec.id && <button onClick={() => copyToClipboard(rec.id, rec.id)} className="text-xs text-gray-500 dark:text-gray-400 hover:underline mt-1">Copy ID</button>}
                                 </div>
                               </div>
                             </div>
@@ -327,13 +327,13 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({ data }) => 
         );
       })}
       {modalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="font-semibold text-lg text-gray-900">Details — {modalItem.resource ?? modalItem.id}</h3>
-              <button onClick={() => setModalItem(null)} className="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200">Close</button>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-t-xl sm:rounded-xl w-full sm:max-w-3xl shadow-xl overflow-hidden max-h-[90vh]">
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">Details — {modalItem.resource ?? modalItem.id}</h3>
+              <button onClick={() => setModalItem(null)} className="px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200">Close</button>
             </div>
-            <div className="p-4 max-h-[60vh] overflow-auto"><pre className="whitespace-pre-wrap text-xs text-gray-800">{JSON.stringify(modalItem.__raw ?? parseJSONSafe(modalItem.description) ?? modalItem, null, 2)}</pre></div>
+            <div className="p-4 max-h-[60vh] overflow-auto"><pre className="whitespace-pre-wrap text-xs text-gray-800 dark:text-gray-200">{JSON.stringify(modalItem.__raw ?? parseJSONSafe(modalItem.description) ?? modalItem, null, 2)}</pre></div>
           </div>
         </div>
       )}

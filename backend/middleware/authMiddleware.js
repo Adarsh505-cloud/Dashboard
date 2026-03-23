@@ -1,23 +1,25 @@
 // backend/middleware/authMiddleware.js
 import { CognitoJwtVerifier } from "aws-jwt-verify";
 
+const userPoolId = process.env.COGNITO_USER_POOL_ID || "us-west-2_XF0vQvYuH";
+const clientId = process.env.COGNITO_CLIENT_ID || "641sh8j3j5iv62aot4ecnlpc3q";
+
 const verifier = CognitoJwtVerifier.create({
-  userPoolId: "us-west-2_XF0vQvYuH", // IMPORTANT: Replace with your User Pool ID
+  userPoolId,
   tokenUse: "access",
-  clientId: "641sh8j3j5iv62aot4ecnlpc3q", // IMPORTANT: Replace with your Client ID
+  clientId,
 });
 
 export const authenticateUser = async (req, res, next) => {
-  // --- ADDED: Bypass auth for local development ---
-  if (process.env.NODE_ENV !== 'production') {
-    req.user = { 
+  // Bypass auth only when explicitly opted in via SKIP_AUTH=true
+  if (process.env.SKIP_AUTH === 'true') {
+    req.user = {
       id: 'local-dev-id',
       email: 'local-dev@example.com',
-      groups: ['Admins'] // Ensure the fake user has the Admins group
+      groups: ['Admins']
     };
     return next();
   }
-  // ----------------------------------------------
 
   try {
     const authHeader = req.headers.authorization;
@@ -40,7 +42,7 @@ export const authenticateUser = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Authentication error:", error);
+    console.error("Authentication error:", error.message);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 };

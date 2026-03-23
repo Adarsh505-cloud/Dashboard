@@ -9,8 +9,10 @@ export interface ResourceDetail {
   owner: string;
   project: string;
   createdDate: string;
-  status: 'running' | 'stopped' | 'pending' | 'terminated' | 'unknown';
+  status: 'running' | 'stopped' | 'pending' | 'terminated' | 'likely_terminated' | 'unknown';
   cost: number;
+  lastSeenDate?: string | null;
+  firstSeenDate?: string | null;
   tags: Array<{ key: string; value: string }>;
   specifications?: {
     instanceType?: string;
@@ -25,6 +27,8 @@ export interface ApiCredentials {
   roleArn: string;
   accountType?: 'standalone' | 'master';
   targetAccountId?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ApiResponse<T> {
@@ -46,11 +50,12 @@ export interface OnboardedAccount {
 
 
 // --- CONFIGURATION ---
-const API_GATEWAY_URL = 'https://yxxc6buhjk.execute-api.us-west-2.amazonaws.com';
+// In local dev, Vite proxies /api to localhost:3001; in production, use the API Gateway URL.
+const API_GATEWAY_URL = import.meta.env.VITE_API_GATEWAY_URL || '';
 
 export const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: "641sh8j3j5iv62aot4ecnlpc3q", // Your actual Client ID
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
 };
 
 // --- HELPER TO GET AUTH TOKEN ---
@@ -161,7 +166,7 @@ class ApiService {
   }
 
   // --- CHATBOT METHOD ---
-  async sendChatMessage(payload: { accountId: string; prompt: string; sessionId: string }): Promise<{ reply: string }> {
+  async sendChatMessage(payload: { accountId: string; prompt: string; sessionId: string; accountType?: string }): Promise<{ reply: string }> {
     return this.makeRequest(`${API_GATEWAY_URL}/api/chat`, payload, 'POST');
   }
 }

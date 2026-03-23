@@ -56,13 +56,13 @@ const ManageAccessModal: React.FC<ManageAccessModalProps> = ({ user, allAccounts
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Manage Access</h2>
-            <p className="text-sm text-gray-600">Assign accounts for {user.email}</p>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Manage Access</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Assign accounts for {user.email}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100"><X /></button>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><X /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
@@ -70,24 +70,24 @@ const ManageAccessModal: React.FC<ManageAccessModalProps> = ({ user, allAccounts
           ) : (
             <div className="space-y-3">
               {allAccounts.map(account => (
-                <div key={account.accountId} className="flex items-center p-3 rounded-lg border hover:bg-gray-50">
+                <div key={account.accountId} className="flex items-center p-3 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                   <input
                     type="checkbox"
                     id={account.accountId}
-                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                     checked={assignedAccounts.has(account.accountId)}
                     onChange={() => handleToggleAccount(account.accountId)}
                   />
                   <label htmlFor={account.accountId} className="ml-3 text-sm">
-                    <span className="font-medium text-gray-900">{account.name}</span>
-                    <span className="text-gray-500 ml-2 font-mono">{account.accountId}</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{account.name}</span>
+                    <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono">{account.accountId}</span>
                   </label>
                 </div>
               ))}
             </div>
           )}
         </div>
-        <div className="p-6 bg-gray-50 border-t flex justify-end">
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 border-t dark:border-gray-700 flex justify-end">
           <button onClick={handleSave} disabled={isLoading} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
             {isLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save Changes

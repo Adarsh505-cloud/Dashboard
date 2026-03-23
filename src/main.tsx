@@ -3,17 +3,18 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from 'react-oidc-context';
 import type { User } from 'oidc-client-ts';
 
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_XF0vQvYuH",
-  client_id: "641sh8j3j5iv62aot4ecnlpc3q", // <-- IMPORTANT: Replace with your actual client ID
-  redirect_uri: "https://cloudbillanalyzer.epiuse-aws.com", // <-- Your production URL
-  post_logout_redirect_uri: "https://cloudbillanalyzer.epiuse-aws.com",
+  authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  redirect_uri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
+  post_logout_redirect_uri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
   response_type: "code",
   scope: "phone openid email",
-  automaticSilentRenew: true, // Keep the session alive automatically
+  automaticSilentRenew: true,
 };
 
 // This callback removes the auth params from the URL after login.
@@ -23,8 +24,10 @@ const onSigninCallback = (_user: User | void): void => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider {...cognitoAuthConfig} onSigninCallback={onSigninCallback}>
-      <App />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider {...cognitoAuthConfig} onSigninCallback={onSigninCallback}>
+        <App />
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>
 );

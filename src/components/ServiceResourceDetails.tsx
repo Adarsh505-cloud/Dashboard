@@ -17,9 +17,11 @@ interface ResourceDetail {
   owner: string;
   project: string;
   createdDate: string | null;
-  status: 'Active' | 'terminated' | 'unknown' | 'running' | 'stopped' | 'pending';
+  status: 'Active' | 'terminated' | 'likely_terminated' | 'unknown' | 'running' | 'stopped' | 'pending';
   cost: number;
   usageTypes?: string; // FIXED: Catch the usage types from backend
+  lastSeenDate?: string | null;
+  firstSeenDate?: string | null;
   tags: Array<{ key: string; value: string }>;
   specifications?: {
     instanceType?: string;
@@ -35,6 +37,7 @@ interface ResourceDetail {
 
 interface ServiceResourceDetailsProps {
   serviceName: string;
+  productCode?: string;
   serviceCost: number;
   credentials: {
     accountId: string;
@@ -100,7 +103,7 @@ const normalizeResourceData = (apiResponse: any[], serviceName: string): Resourc
     
     if (!byCanonical.has(canonical)) {
       const statusVal = (r.status || r.Status || '').toString().toLowerCase();
-      const normalizedStatus = statusVal === 'terminated' ? 'terminated' : (statusVal === 'active' || statusVal === 'running') ? 'Active' : statusVal === 'stopped' ? 'stopped' : statusVal === 'pending' ? 'pending' : 'unknown';
+      const normalizedStatus = statusVal === 'terminated' ? 'terminated' : statusVal === 'likely_terminated' ? 'likely_terminated' : (statusVal === 'active' || statusVal === 'running') ? 'Active' : statusVal === 'stopped' ? 'stopped' : statusVal === 'pending' ? 'pending' : 'unknown';
       const formatDate = (dateStr: string | null) => {
         if (!dateStr) return null;
         try { const date = new Date(dateStr); return isNaN(date.getTime()) ? dateStr : date.toISOString(); } catch { return dateStr; }
@@ -128,6 +131,8 @@ const normalizeResourceData = (apiResponse: any[], serviceName: string): Resourc
         deletionDate: formatDate(r.deletionDate || r.deletion_date),
         deletedBy: extractUserNameFromArn(r.deletedBy || r.deleted_user || r.deleted_by || null),
         status: normalizedStatus,
+        lastSeenDate: r.lastSeenDate || r.last_seen_date || null,
+        firstSeenDate: r.firstSeenDate || r.first_seen_date || null,
         cost: Number(r.total_cost || r.cost || 0),
         usageTypes: r.usageTypes || r.usage_types || 'Unknown', // FIXED: Capture usage types
         tags: Array.isArray(r.tags) ? r.tags : (r.resource_tags ? Object.entries(r.resource_tags).map(([k, v]) => ({ key: k, value: v })) : []),
@@ -138,7 +143,9 @@ const normalizeResourceData = (apiResponse: any[], serviceName: string): Resourc
       const existing = byCanonical.get(canonical);
       existing.cost = Number((Number(existing.cost || 0) + Number(r.total_cost || r.cost || 0)).toFixed(6));
       if (Array.isArray(r.tags) && r.tags.length > 0) { existing.tags = Array.from(new Map([...existing.tags, ...r.tags].map((t: any) => [t.key, t])).values()); }
-      if ((r.status || '').toString().toLowerCase() === 'terminated') existing.status = 'terminated';
+      const mergeStatus = (r.status || '').toString().toLowerCase();
+      if (mergeStatus === 'terminated') existing.status = 'terminated';
+      else if (mergeStatus === 'likely_terminated' && existing.status !== 'terminated') existing.status = 'likely_terminated';
     }
   });
   
@@ -167,6 +174,7 @@ const getStatusIcon = (status: string) => {
       case 'active': case 'running': return <CheckCircle className="w-4 h-4 text-emerald-500" />;
       case 'stopped': return <AlertCircle className="w-4 h-4 text-red-500" />;
       case 'pending': return <Clock className="w-4 h-4 text-amber-500" />;
+      case 'likely_terminated': return <Clock className="w-4 h-4 text-orange-500" />;
       case 'terminated': return <XCircle className="w-4 h-4 text-gray-400" />;
       default: return <AlertCircle className="w-4 h-4 text-gray-400" />;
     }
@@ -174,11 +182,12 @@ const getStatusIcon = (status: string) => {
 
 const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'active': case 'running': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'stopped': return 'bg-red-50 text-red-700 border-red-200';
-      case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'terminated': return 'bg-gray-50 text-gray-500 border-gray-200';
-      default: return 'bg-gray-50 text-gray-600 border-gray-200';
+      case 'active': case 'running': return 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+      case 'stopped': return 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800';
+      case 'pending': return 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+      case 'likely_terminated': return 'bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800';
+      case 'terminated': return 'bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700';
+      default: return 'bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700';
     }
 };
 
@@ -211,22 +220,22 @@ const formatDateTime = (dateStr: string | null) => {
 
 const ResourceCard: React.FC<{ resource: ResourceDetail }> = React.memo(({ resource }) => {
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300 hover:border-slate-300">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700 overflow-hidden hover:shadow-xl transition-all duration-300 hover:border-slate-300 dark:hover:border-gray-600">
       <div className="p-6">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
           <div className="flex items-start gap-4 flex-1 min-w-0">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex-shrink-0">
+            <div className="p-3 bg-slate-50 dark:bg-gray-900 rounded-xl border border-slate-200 dark:border-gray-700 flex-shrink-0">
               {getServiceIcon(resource.type)}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-semibold text-slate-900 truncate pr-4" title={resource.name}>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-gray-100 truncate pr-4" title={resource.name}>
                 {formatResourceName(resource.name)}
               </h3>
               
               <div className="flex flex-col gap-2 my-3">
-                <div className="bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 border border-slate-100">
-                  <span className="text-sm text-slate-500 font-medium shrink-0">Resource ID:</span>
-                  <code className="text-sm text-slate-600 font-mono break-all">{resource.id}</code>
+                <div className="bg-slate-50 dark:bg-gray-900 rounded-lg px-3 py-2 flex items-center gap-2 border border-slate-100 dark:border-gray-700">
+                  <span className="text-sm text-slate-500 dark:text-gray-400 font-medium shrink-0">Resource ID:</span>
+                  <code className="text-sm text-slate-600 dark:text-gray-400 font-mono break-all">{resource.id}</code>
                 </div>
                 {/* FIXED: Added Billed To Account to prove the cost routing */}
                 {resource.accountId && resource.accountId !== 'Unknown' && (
@@ -247,23 +256,30 @@ const ResourceCard: React.FC<{ resource: ResourceDetail }> = React.memo(({ resou
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2 my-4">
-                <div className="flex items-center gap-2" title="Region"><MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" /><span className="text-slate-600 text-sm truncate">{resource.region || 'unknown'}</span></div>
+                <div className="flex items-center gap-2" title="Region"><MapPin className="w-4 h-4 text-slate-400 dark:text-gray-500 flex-shrink-0" /><span className="text-slate-600 dark:text-gray-400 text-sm truncate">{resource.region || 'unknown'}</span></div>
                 <div className="flex items-center gap-2" title="Owner">
-                  <User className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                  <div className="relative group"><span className="text-slate-600 text-sm truncate cursor-help">{resource.owner}</span>{resource.ownerTooltip && ( <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">{resource.ownerTooltip}<div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black"></div></div>)}</div>
+                  <User className="w-4 h-4 text-slate-400 dark:text-gray-500 flex-shrink-0" />
+                  <div className="relative group"><span className="text-slate-600 dark:text-gray-400 text-sm truncate cursor-help">{resource.owner}</span>{resource.ownerTooltip && ( <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">{resource.ownerTooltip}<div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black"></div></div>)}</div>
                 </div>
-                <div className="flex items-center gap-2" title="Creation Date"><Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" /><span className="text-slate-600 text-sm">{formatDate(resource.createdDate)}</span></div>
-                <div className="flex items-center gap-2" title="Status">{getStatusIcon(resource.status)}<span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(resource.status)}`}>{(resource.status || 'unknown').toUpperCase()}</span></div>
+                <div className="flex items-center gap-2" title="Creation Date"><Calendar className="w-4 h-4 text-slate-400 dark:text-gray-500 flex-shrink-0" /><span className="text-slate-600 dark:text-gray-400 text-sm">{formatDate(resource.createdDate)}</span></div>
+                <div className="flex items-center gap-2" title="Status">
+                  {getStatusIcon(resource.status)}
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(resource.status)}`}>
+                    {resource.status === 'likely_terminated'
+                      ? `Last Seen: ${resource.lastSeenDate ? formatDate(resource.lastSeenDate) : 'N/A'}`
+                      : (resource.status || 'unknown').toUpperCase()}
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-2">{resource.createdBy && resource.createdDate && (<div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 px-3 py-2 rounded-lg"><CheckCircle className="w-4 h-4" /><span>Created on {formatDateTime(resource.createdDate)} by <span className="font-medium">{resource.createdBy}</span></span></div>)}{(resource.status === 'terminated' || resource.deletionDate) && resource.deletionDate && (<div className="flex items-center gap-2 text-sm bg-red-50 text-red-700 px-3 py-2 rounded-lg"><XCircle className="w-4 h-4" /><span>Deleted on {formatDateTime(resource.deletionDate)}{resource.deletedBy && <> by <span className="font-medium">{resource.deletedBy}</span></>}</span></div>)}</div>
+              <div className="space-y-2">{resource.createdBy && resource.createdDate && (<div className="flex items-center gap-2 text-sm bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg"><CheckCircle className="w-4 h-4" /><span>Created on {formatDateTime(resource.createdDate)} by <span className="font-medium">{resource.createdBy}</span></span></div>)}{(resource.status === 'terminated' || resource.deletionDate) && resource.deletionDate && (<div className="flex items-center gap-2 text-sm bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 px-3 py-2 rounded-lg"><XCircle className="w-4 h-4" /><span>Deleted on {formatDateTime(resource.deletionDate)}{resource.deletedBy && <> by <span className="font-medium">{resource.deletedBy}</span></>}</span></div>)}</div>
               
-              {resource.specifications && Object.keys(resource.specifications).length > 0 && ( <div className="mt-4 p-4 bg-slate-50 rounded-xl"><h4 className="text-sm font-medium text-slate-700 mb-3">Specifications</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{resource.specifications.instanceType && <div className="flex items-center gap-2"><Cpu className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500">Instance Type</div><div className="font-medium text-slate-700">{resource.specifications.instanceType}</div></div></div>}{resource.specifications.memory && <div className="flex items-center gap-2"><MemoryStick className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500">Memory</div><div className="font-medium text-slate-700">{resource.specifications.memory}</div></div></div>}{resource.specifications.storage && <div className="flex items-center gap-2"><HardDrive className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500">Storage</div><div className="font-medium text-slate-700">{resource.specifications.storage}</div></div></div>}{resource.specifications.cpu && <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500">CPU</div><div className="font-medium text-slate-700">{resource.specifications.cpu}</div></div></div>}</div></div>)}
+              {resource.specifications && Object.keys(resource.specifications).length > 0 && ( <div className="mt-4 p-4 bg-slate-50 dark:bg-gray-900 rounded-xl"><h4 className="text-sm font-medium text-slate-700 dark:text-gray-300 mb-3">Specifications</h4><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{resource.specifications.instanceType && <div className="flex items-center gap-2"><Cpu className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500 dark:text-gray-400">Instance Type</div><div className="font-medium text-slate-700 dark:text-gray-300">{resource.specifications.instanceType}</div></div></div>}{resource.specifications.memory && <div className="flex items-center gap-2"><MemoryStick className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500 dark:text-gray-400">Memory</div><div className="font-medium text-slate-700 dark:text-gray-300">{resource.specifications.memory}</div></div></div>}{resource.specifications.storage && <div className="flex items-center gap-2"><HardDrive className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500 dark:text-gray-400">Storage</div><div className="font-medium text-slate-700 dark:text-gray-300">{resource.specifications.storage}</div></div></div>}{resource.specifications.cpu && <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-slate-500" /><div><div className="text-xs text-slate-500 dark:text-gray-400">CPU</div><div className="font-medium text-slate-700 dark:text-gray-300">{resource.specifications.cpu}</div></div></div>}</div></div>)}
               
-              {resource.tags && resource.tags.length > 0 && (<div className="mt-4"><div className="flex items-center gap-2 mb-3"><Tag className="w-4 h-4 text-slate-500" /><span className="text-sm font-medium text-slate-700">Tags</span></div><div className="flex flex-wrap gap-2">{resource.tags.map((tag, index) => (<span key={index} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium border border-blue-200">{tag.key}: {tag.value}</span>))}</div></div>)}
+              {resource.tags && resource.tags.length > 0 && (<div className="mt-4"><div className="flex items-center gap-2 mb-3"><Tag className="w-4 h-4 text-slate-500 dark:text-gray-400" /><span className="text-sm font-medium text-slate-700 dark:text-gray-300">Tags</span></div><div className="flex flex-wrap gap-2">{resource.tags.map((tag, index) => (<span key={index} className="px-3 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium border border-blue-200 dark:border-blue-800">{tag.key}: {tag.value}</span>))}</div></div>)}
             </div>
           </div>
-          {resource.cost > 0 && (<div className="text-right flex-shrink-0 w-full sm:w-auto mt-4 sm:mt-0"><div className="text-2xl font-bold text-slate-900">${Number(resource.cost).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div><div className="text-sm text-slate-500">monthly</div></div>)}
+          {resource.cost > 0 && (<div className="text-right flex-shrink-0 w-full sm:w-auto mt-4 sm:mt-0"><div className="text-2xl font-bold text-slate-900 dark:text-gray-100">${Number(resource.cost).toLocaleString(undefined, { maximumFractionDigits: 6 })}</div><div className="text-sm text-slate-500 dark:text-gray-400">monthly</div></div>)}
         </div>
       </div>
     </div>
@@ -272,7 +288,7 @@ const ResourceCard: React.FC<{ resource: ResourceDetail }> = React.memo(({ resou
 
 // --- MAIN COMPONENT ---
 
-const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ serviceName, serviceCost, credentials, onBack }) => {
+const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ serviceName, productCode, serviceCost, credentials, onBack }) => {
   const [resources, setResources] = useState<ResourceDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -286,7 +302,7 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
       setLoading(true);
       setError(null);
       try {
-        const apiResponse = await apiService.getResourcesForService(credentials, serviceName);
+        const apiResponse = await apiService.getResourcesForService(credentials, productCode || serviceName);
         const normalized = normalizeResourceData(apiResponse, serviceName);
         setResources(normalized);
       } catch (err) {
@@ -335,16 +351,17 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
 
   const uniqueRegions = useMemo(() => [...new Set(resources.map(r => r.region || 'unknown'))], [resources]);
   const activeResources = useMemo(() => resources.filter(r => r.status === 'Active' || r.status === 'running').length, [resources]);
+  const likelyTerminatedCount = useMemo(() => resources.filter(r => r.status === 'likely_terminated').length, [resources]);
   
   const handleExport = useCallback(() => {
       const csvRows = [];
-      const headers = ['accountId', 'id', 'name', 'type', 'region', 'owner', 'project', 'status', 'createdDate', 'createdBy', 'deletionDate', 'deletedBy', 'cost', 'usageTypes'];
+      const headers = ['accountId', 'id', 'name', 'type', 'region', 'owner', 'project', 'status', 'lastSeenDate', 'firstSeenDate', 'createdDate', 'createdBy', 'deletionDate', 'deletedBy', 'cost', 'usageTypes'];
       csvRows.push(headers.join(','));
       filteredResources.forEach(r => {
         const row = [
           `"${r.accountId || ''}"`, `"${r.id}"`, `"${(r.name || '').replace(/"/g, '""')}"`, `"${(r.type || '').replace(/"/g, '""')}"`,
           `"${(r.region || '')}"`, `"${(r.owner || '').replace(/"/g, '""')}"`, `"${(r.project || '').replace(/"/g, '""')}"`,
-          `"${r.status}"`, `"${r.createdDate || ''}"`, `"${r.createdBy || ''}"`, `"${r.deletionDate || ''}"`,
+          `"${r.status}"`, `"${r.lastSeenDate || ''}"`, `"${r.firstSeenDate || ''}"`, `"${r.createdDate || ''}"`, `"${r.createdBy || ''}"`, `"${r.deletionDate || ''}"`,
           `"${r.deletedBy || ''}"`, `${r.cost}`, `"${r.usageTypes || ''}"`
         ];
         csvRows.push(row.join(','));
@@ -364,78 +381,126 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Services
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
-              <p className="text-slate-600">Loading enhanced resource data from your AWS account...</p>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 relative overflow-hidden">
+        {/* Animated background grid */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(59,130,246,0.5) 1px, transparent 0)',
+            backgroundSize: '40px 40px'
+          }}></div>
+        </div>
+
+        {/* Floating particles */}
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-cyan-500/30 rounded-full animate-pulse"></div>
+        <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-blue-500/20 rounded-full animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-indigo-500/25 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+        <div className="absolute top-1/2 right-1/4 w-1.5 h-1.5 bg-cyan-400/30 rounded-full animate-pulse" style={{ animationDelay: '1.5s' }}></div>
+
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="absolute top-5 left-5 flex items-center gap-2 px-3 py-2 text-cyan-400 hover:text-white hover:bg-white/10 rounded-lg transition-all text-sm z-10"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="hidden sm:inline">Back to Services</span>
+        </button>
+
+        <div className="w-full max-w-sm text-center relative z-10">
+          {/* Animated ring + database icon */}
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto mb-8">
+            <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 opacity-20 blur-lg animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-gray-700"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400 border-r-blue-500 animate-spin" style={{ animationDuration: '2s' }}></div>
+            <div className="absolute inset-3 rounded-full border-2 border-gray-800"></div>
+            <div className="absolute inset-3 rounded-full border-2 border-transparent border-b-indigo-400 border-l-cyan-500 animate-spin" style={{ animationDuration: '3s', animationDirection: 'reverse' }}></div>
+            <div className="absolute inset-5 rounded-full bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <Database className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-12 text-center">
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <Loader className="w-10 h-10 text-blue-600 animate-spin" />
-              <h2 className="text-2xl font-semibold text-slate-800">Analyzing Resources</h2>
-            </div>
-            <p className="text-slate-600 mb-8 text-lg">
-              Correlating cost data with CloudTrail events to identify owners and lifecycles...
-            </p>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 text-left max-w-2xl mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Connecting to Cost and Usage Reports</span>
+
+          {/* Title */}
+          <h2 className="text-xl sm:text-2xl font-bold mb-2">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400">
+              Analyzing Resources
+            </span>
+          </h2>
+          <p className="text-xs sm:text-sm text-gray-400 mb-10 font-mono truncate px-4">
+            {serviceName}
+          </p>
+
+          {/* Progress steps */}
+          <div className="space-y-3 sm:space-y-4 text-left max-w-xs mx-auto mb-10 px-2">
+            {[
+              'Querying Cost and Usage Reports',
+              'Correlating CloudTrail creation events',
+              'Correlating CloudTrail deletion events',
+              'Extracting resource metadata and tags',
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-3 text-xs sm:text-sm">
+                <div className="relative w-5 h-5 shrink-0">
+                  <div className="absolute inset-0 rounded-full border-2 border-cyan-500/40"></div>
+                  <div
+                    className="absolute inset-[3px] rounded-full bg-cyan-400 animate-pulse"
+                    style={{ animationDelay: `${i * 400}ms`, animationDuration: '1.5s' }}
+                  ></div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                  <span>Querying CloudTrail for creation events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                  <span>Querying CloudTrail for deletion events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-                  <span>Extracting resource metadata and tags</span>
-                </div>
+                <span className="text-gray-300">{step}</span>
               </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full max-w-xs mx-auto px-2">
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 rounded-full"
+                style={{
+                  animation: 'resourceProgressBar 8s ease-in-out infinite',
+                  width: '0%',
+                }}
+              ></div>
             </div>
+            <p className="text-xs text-gray-500 mt-3 tracking-wide">Processing...</p>
           </div>
         </div>
+
+        <style>{`
+          @keyframes resourceProgressBar {
+            0% { width: 5%; }
+            20% { width: 25%; }
+            40% { width: 45%; }
+            60% { width: 65%; }
+            80% { width: 85%; }
+            100% { width: 95%; }
+          }
+        `}</style>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-950 dark:to-gray-900">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center gap-4 mb-8">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-xl transition-all duration-200 shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"
             >
               <ArrowLeft className="w-5 h-5" />
               Back to Services
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
+              <h1 className="text-3xl font-bold text-slate-900 dark:text-gray-100">{serviceName} Resources</h1>
               <p className="text-red-600">Error loading resource data</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl border border-red-200 p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/20 border border-red-200 dark:border-red-800 p-12 text-center">
             <div className="flex items-center justify-center gap-4 mb-6">
               <AlertCircle className="w-10 h-10 text-red-600" />
-              <h2 className="text-2xl font-semibold text-red-800">Failed to Load Resources</h2>
+              <h2 className="text-2xl font-semibold text-red-800 dark:text-red-300">Failed to Load Resources</h2>
             </div>
-            <p className="text-red-700 mb-8 text-lg">{error}</p>
+            <p className="text-red-700 dark:text-red-300 mb-8 text-lg">{error}</p>
             <button
               onClick={() => window.location.reload()}
               className="flex items-center gap-2 px-8 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all duration-200 mx-auto shadow-lg"
@@ -451,35 +516,35 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
 
   if (resources.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-950 dark:to-gray-900">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center gap-4 mb-8">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"
+              className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-xl transition-all duration-200 shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"
             >
               <ArrowLeft className="w-5 h-5" />
               Back to Services
             </button>
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200">
+              <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700">
                 {getServiceIcon(serviceName)}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1>
-                <p className="text-slate-600">No resources found for this service</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-gray-100">{serviceName} Resources</h1>
+                <p className="text-slate-600 dark:text-gray-400">No resources found for this service</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700 p-12 text-center">
             <Server className="w-16 h-16 text-slate-300 mx-auto mb-6" />
-            <h2 className="text-2xl font-semibold text-slate-900 mb-4">No Resources Found</h2>
-            <p className="text-slate-600 mb-8 text-lg">
+            <h2 className="text-2xl font-semibold text-slate-900 dark:text-gray-100 mb-4">No Resources Found</h2>
+            <p className="text-slate-600 dark:text-gray-400 mb-8 text-lg">
               No resources for {serviceName} were found in your AWS account's cost data.
             </p>
-            <div className="bg-slate-50 rounded-xl p-6 text-left max-w-md mx-auto">
-              <p className="text-slate-700 font-medium mb-3">This could be because:</p>
-              <ul className="list-disc list-inside text-slate-600 space-y-2">
+            <div className="bg-slate-50 dark:bg-gray-900 rounded-xl p-6 text-left max-w-md mx-auto">
+              <p className="text-slate-700 dark:text-gray-300 font-medium mb-3">This could be because:</p>
+              <ul className="list-disc list-inside text-slate-600 dark:text-gray-400 space-y-2">
                 <li>No resources of this type incurred costs in the current period.</li>
                 <li>Resources exist but have not yet appeared in the cost reports.</li>
                 <li>The service has no billable resources (e.g., IAM).</li>
@@ -492,26 +557,26 @@ const ServiceResourceDetails: React.FC<ServiceResourceDetailsProps> = ({ service
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-950 dark:to-gray-900">
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center gap-4 mb-8">
-            <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-white rounded-xl transition-all duration-200 shadow-sm border border-slate-200"><ArrowLeft className="w-5 h-5" /> Back</button>
-            <div className="flex items-center gap-4"><div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200">{getServiceIcon(serviceName)}</div><div><h1 className="text-3xl font-bold text-slate-900">{serviceName} Resources</h1><p className="text-slate-600">Enhanced resource data with CloudTrail insights</p></div></div>
+            <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-gray-400 hover:text-slate-900 dark:hover:text-gray-100 hover:bg-white dark:hover:bg-gray-800 rounded-xl transition-all duration-200 shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"><ArrowLeft className="w-5 h-5" /> Back</button>
+            <div className="flex items-center gap-4"><div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700">{getServiceIcon(serviceName)}</div><div><h1 className="text-3xl font-bold text-slate-900 dark:text-gray-100">{serviceName} Resources</h1><p className="text-slate-600 dark:text-gray-400">Enhanced resource data with CloudTrail insights</p></div></div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-blue-100 rounded-xl"><Server className="w-6 h-6 text-blue-600" /></div><span className="font-semibold text-slate-700">Total Resources</span></div><div className="text-3xl font-bold text-slate-900 mb-1">{filteredResources.length}</div><div className="text-sm text-slate-500">{resources.length !== filteredResources.length ? `${resources.length} total` : 'resources found'}</div></div>
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-emerald-100 rounded-xl"><CheckCircle className="w-6 h-6 text-emerald-600" /></div><span className="font-semibold text-slate-700">Active</span></div><div className="text-3xl font-bold text-emerald-600 mb-1">{activeResources}</div><div className="text-sm text-slate-500">{resources.length > 0 ? `${Math.round((activeResources / resources.length) * 100)}% active` : '—'}</div></div>
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-purple-100 rounded-xl"><MapPin className="w-6 h-6 text-purple-600" /></div><span className="font-semibold text-slate-700">Resource Types</span></div><div className="text-3xl font-bold text-slate-900 mb-1">{Object.keys(groupedResources).length}</div><div className="text-sm text-slate-500 truncate">{Object.keys(groupedResources).slice(0, 2).join(', ')}</div></div>
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-orange-100 rounded-xl"><DollarSign className="w-6 h-6 text-orange-600" /></div><span className="font-semibold text-slate-700">Total Cost</span></div><div className="text-3xl font-bold text-orange-600 mb-1">${serviceCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div><div className="text-sm text-slate-500">${(filteredResources.length > 0 ? serviceCost / filteredResources.length : 0).toFixed(2)} avg</div></div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-blue-100 rounded-xl"><Server className="w-6 h-6 text-blue-600" /></div><span className="font-semibold text-slate-700 dark:text-gray-300">Total Resources</span></div><div className="text-3xl font-bold text-slate-900 dark:text-gray-100 mb-1">{filteredResources.length}</div><div className="text-sm text-slate-500 dark:text-gray-400">{resources.length !== filteredResources.length ? `${resources.length} total` : 'resources found'}</div></div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-emerald-100 rounded-xl"><CheckCircle className="w-6 h-6 text-emerald-600" /></div><span className="font-semibold text-slate-700 dark:text-gray-300">Active</span></div><div className="text-3xl font-bold text-emerald-600 mb-1">{activeResources}</div><div className="text-sm text-slate-500 dark:text-gray-400">{resources.length > 0 ? `${Math.round((activeResources / resources.length) * 100)}% active` : '—'}</div></div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-purple-100 rounded-xl"><MapPin className="w-6 h-6 text-purple-600" /></div><span className="font-semibold text-slate-700 dark:text-gray-300">Resource Types</span></div><div className="text-3xl font-bold text-slate-900 dark:text-gray-100 mb-1">{Object.keys(groupedResources).length}</div><div className="text-sm text-slate-500 dark:text-gray-400 truncate">{Object.keys(groupedResources).slice(0, 2).join(', ')}</div></div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700"><div className="flex items-center gap-3 mb-3"><div className="p-2 bg-orange-100 rounded-xl"><DollarSign className="w-6 h-6 text-orange-600" /></div><span className="font-semibold text-slate-700 dark:text-gray-300">Total Cost</span></div><div className="text-3xl font-bold text-orange-600 mb-1">${serviceCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div><div className="text-sm text-slate-500 dark:text-gray-400">${(filteredResources.length > 0 ? serviceCost / filteredResources.length : 0).toFixed(2)} avg</div></div>
         </div>
         
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 mb-8">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between"><div className="flex flex-col sm:flex-row gap-4 flex-1"><div className="relative"><Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" /><input type="text" placeholder="Search resources..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-64 transition-all" /></div><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"><option value="all">All Status</option><option value="Active">Active</option><option value="terminated">Terminated</option></select><select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} className="px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"><option value="all">All Regions</option>{uniqueRegions.map(region => (<option key={region} value={region}>{region}</option>))}</select><select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'cost' | 'name' | 'created')} className="px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"><option value="cost">Sort by Cost</option><option value="name">Sort by Name</option><option value="created">Sort by Created Date</option></select></div><button onClick={handleExport} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md"><Download className="w-4 h-4" /> Export</button></div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700 p-6 mb-8">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between"><div className="flex flex-col sm:flex-row gap-4 flex-1"><div className="relative"><Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-gray-500" /><input type="text" placeholder="Search resources..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-3 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-64 transition-all bg-white dark:bg-gray-900 text-slate-900 dark:text-gray-100" /></div><select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-4 py-3 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white dark:bg-gray-900 text-slate-900 dark:text-gray-100"><option value="all">All Status</option><option value="Active">Active</option><option value="likely_terminated">Last Seen (Likely Terminated)</option><option value="terminated">Terminated</option></select><select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} className="px-4 py-3 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white dark:bg-gray-900 text-slate-900 dark:text-gray-100"><option value="all">All Regions</option>{uniqueRegions.map(region => (<option key={region} value={region}>{region}</option>))}</select><select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'cost' | 'name' | 'created')} className="px-4 py-3 border border-slate-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white dark:bg-gray-900 text-slate-900 dark:text-gray-100"><option value="cost">Sort by Cost</option><option value="name">Sort by Name</option><option value="created">Sort by Created Date</option></select></div><button onClick={handleExport} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md"><Download className="w-4 h-4" /> Export</button></div>
         </div>
         
         <div className="space-y-8">{Object.entries(groupedResources).map(([resourceType, resourcesInGroup]) => (<div key={resourceType} className="space-y-4"><div className="flex items-center justify-between bg-slate-800 text-white px-6 py-4 rounded-t-2xl"><div className="flex items-center gap-3"><div className="p-2 bg-slate-700 rounded-lg">{getServiceIcon(resourceType)}</div><h2 className="text-xl font-bold">{resourceType}</h2><span className="bg-slate-700 px-3 py-1 rounded-full text-sm font-medium">{resourcesInGroup.length}</span></div><div className="text-slate-300 text-sm">Total Cost: ${resourcesInGroup.reduce((sum, r) => sum + r.cost, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div></div><div className="grid gap-4">{resourcesInGroup.map((resource) => ( <ResourceCard key={resource.id} resource={resource} /> ))}</div></div>))}</div>
-        {filteredResources.length === 0 && resources.length > 0 && (<div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-12 text-center"><Filter className="w-16 h-16 text-slate-300 mx-auto mb-6" /><h3 className="text-2xl font-semibold text-slate-900 mb-4">No matching resources</h3><p className="text-slate-600 text-lg">Try adjusting your search and filter criteria.</p></div>)}
+        {filteredResources.length === 0 && resources.length > 0 && (<div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-slate-200 dark:border-gray-700 p-12 text-center"><Filter className="w-16 h-16 text-slate-300 mx-auto mb-6" /><h3 className="text-2xl font-semibold text-slate-900 dark:text-gray-100 mb-4">No matching resources</h3><p className="text-slate-600 dark:text-gray-400 text-lg">Try adjusting your search and filter criteria.</p></div>)}
       </div>
     </div>
   );
