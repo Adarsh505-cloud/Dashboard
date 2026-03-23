@@ -51,7 +51,7 @@ interface WeeklyCostData {
 // Add all missing properties here.
 export interface ApiData {
   totalMonthlyCost: number;
-  serviceCosts: Array<{ service: string; cost: number; region: string }>;
+  serviceCosts: Array<{ service: string; productCode?: string; cost: number; region: string }>;
   regionCosts: Array<{ region: string; cost: number }>;
   userCosts: Array<{ user: string; cost: number; resources: number; resourcesList: string[] | null | string; }>;
   resourceCosts: Array<{ type: string; cost: number; trend: number[]; count: number }>;
