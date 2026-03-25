@@ -13,7 +13,12 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Server,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  ShoppingCart,
+  Cpu,
+  Globe,
+  Crown
 } from "lucide-react";
 
 interface MasterOverviewProps {
@@ -98,6 +103,37 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
   }).sort((a: any, b: any) => b.cost - a.cost);
 
   const topAcc = ACCOUNTS[0] || { id: "N/A", cost: 0, pct: 0, name: "N/A" };
+
+  // 1b. Process Service Costs for KPI cards
+  const serviceCosts = Array.isArray(data?.serviceCosts) ? data.serviceCosts : [];
+  const serviceAgg: Record<string, number> = {};
+  serviceCosts.forEach((s: any) => {
+    const key = s.service || s.productCode || 'Unknown';
+    serviceAgg[key] = (serviceAgg[key] || 0) + Number(s.cost || 0);
+  });
+  const sortedServices = Object.entries(serviceAgg).sort(([,a], [,b]) => b - a);
+  const topService = sortedServices[0] || ['N/A', 0];
+  const topServicePct = totalCost > 0 ? (Number(topService[1]) / totalCost * 100) : 0;
+
+  // Support cost (AWSSupportEssential, AWSSupportBusiness, AWSSupportEnterprise, AWSSupportDeveloper)
+  const supportCost = sortedServices
+    .filter(([name]) => name.toLowerCase().includes('support'))
+    .reduce((sum, [, cost]) => sum + cost, 0);
+
+  // Marketplace cost (product codes that don't start with Amazon/AWS)
+  const marketplaceCost = sortedServices
+    .filter(([name]) => !name.startsWith('Amazon') && !name.startsWith('AWS') && name !== 'Unknown' && name !== 'N/A')
+    .reduce((sum, [, cost]) => sum + cost, 0);
+
+  // 1c. Process Region Costs for KPI cards
+  const regionCosts = Array.isArray(data?.regionCosts) ? data.regionCosts : [];
+  const sortedRegions = [...regionCosts].sort((a: any, b: any) => Number(b.cost || 0) - Number(a.cost || 0));
+  const topRegion = sortedRegions[0] || { region: 'N/A', cost: 0 };
+  const topRegionPct = totalCost > 0 ? (Number(topRegion.cost || 0) / totalCost * 100) : 0;
+
+  // 1d. MoM trend calculation
+  const lastMonthCost = Number(data?.lastMonthCost || 0);
+  const momChange = lastMonthCost > 0 ? ((totalCost - lastMonthCost) / lastMonthCost * 100) : 0;
 
   // 2. Process Recommendations
   const recommendations = Array.isArray(data?.recommendations) ? data.recommendations : [];

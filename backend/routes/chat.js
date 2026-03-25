@@ -1,22 +1,30 @@
 import express from 'express';
 import { BedrockAgentRuntimeClient, InvokeAgentCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { fromTemporaryCredentials } from "@aws-sdk/credential-providers";
 import { authenticateUser } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-const CROSS_ACCOUNT_ROLE_ARN = process.env.BEDROCK_CROSS_ACCOUNT_ROLE_ARN || "arn:aws:iam::252078852689:role/CrossAccountBedrockAgentRole";
+// Bedrock client — in production (Lambda), uses execution role automatically.
+// For local dev, set BEDROCK_INVOKE_ROLE_ARN to assume a role with Bedrock permissions.
+const BEDROCK_INVOKE_ROLE = process.env.BEDROCK_INVOKE_ROLE_ARN;
 
-const client = new BedrockAgentRuntimeClient({
-    region: process.env.BEDROCK_REGION || "us-east-1",
-    credentials: fromTemporaryCredentials({
-        params: {
-            RoleArn: CROSS_ACCOUNT_ROLE_ARN,
-            RoleSessionName: "BedrockAgentCrossAccountSession",
-            DurationSeconds: 3600
-        }
+const bedrockClient = BEDROCK_INVOKE_ROLE
+  ? new BedrockAgentRuntimeClient({
+      region: process.env.BEDROCK_REGION || "us-west-2",
+      credentials: fromTemporaryCredentials({
+        params: { RoleArn: BEDROCK_INVOKE_ROLE, RoleSessionName: "BedrockAgentSession", DurationSeconds: 3600 }
+      })
     })
-});
+  : new BedrockAgentRuntimeClient({
+      region: process.env.BEDROCK_REGION || "us-west-2",
+    });
+
+// DynamoDB client — to look up client roleArn from OnboardedAccounts
+const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION || "us-west-2" });
+const docClient = DynamoDBDocumentClient.from(ddbClient);
 
 // Sanitize user prompt to prevent XML/instruction injection
 function sanitizePrompt(raw) {
@@ -42,6 +50,16 @@ router.post('/', authenticateUser, async (req, res) => {
     if (!sanitizedPrompt) {
       return res.status(400).json({ error: 'Prompt is empty after sanitization' });
     }
+
+    // Look up the client's roleArn from DynamoDB (same role used by Express backend Lambda)
+    const { Item } = await docClient.send(new GetCommand({
+      TableName: "OnboardedAccounts",
+      Key: { accountId }
+    }));
+    if (!Item?.roleArn) {
+      return res.status(400).json({ error: 'Account not onboarded or missing roleArn' });
+    }
+    const clientRoleArn = Item.roleArn;
 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
@@ -80,14 +98,30 @@ USER QUERY: ${sanitizedPrompt}`;
     const userId = req.user?.id || 'anonymous';
     const safeSessionId = sessionId || `session-${userId}-${accountId}-${Date.now()}`;
 
+    console.log('[Chat] Invoking Bedrock Agent:', {
+      region: process.env.BEDROCK_REGION,
+      agentId: process.env.BEDROCK_AGENT_ID,
+      aliasId: process.env.BEDROCK_AGENT_ALIAS_ID,
+      accountId,
+      roleArn: clientRoleArn,
+      sessionId: safeSessionId
+    });
+
     const command = new InvokeAgentCommand({
       agentId: process.env.BEDROCK_AGENT_ID,
       agentAliasId: process.env.BEDROCK_AGENT_ALIAS_ID,
       sessionId: safeSessionId,
       inputText: contextualizedPrompt,
+      sessionState: {
+        sessionAttributes: {
+          clientRoleArn: clientRoleArn,
+          clientAccountId: accountId,
+          athenaOutputS3: `s3://cost-analyzer-results-${accountId}-${process.env.ATHENA_REGION || 'us-east-1'}/`,
+        }
+      }
     });
 
-    const response = await client.send(command);
+    const response = await bedrockClient.send(command);
 
     let completion = "";
     for await (const chunkEvent of response.completion) {
@@ -98,7 +132,8 @@ USER QUERY: ${sanitizedPrompt}`;
 
     res.json({ reply: completion });
   } catch (error) {
-    console.error('Error invoking Bedrock Agent:', error.message);
+    console.error('Error invoking Bedrock Agent:', error.name, error.message);
+    console.error('Full error:', JSON.stringify({ name: error.name, code: error.$metadata?.httpStatusCode, region: process.env.BEDROCK_REGION, agentId: process.env.BEDROCK_AGENT_ID, aliasId: process.env.BEDROCK_AGENT_ALIAS_ID }));
     res.status(500).json({ error: 'Failed to communicate with AI Assistant' });
   }
 });

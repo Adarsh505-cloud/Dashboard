@@ -43,9 +43,9 @@ export class CostService {
     return this.targetAccountId ? ` AND line_item_usage_account_id = '${this.targetAccountId}' ` : '';
   }
 
-  // Excludes Credits, Discounts, Refunds, Taxes, RI/SP fees — shows gross infrastructure cost only
+  // Excludes Refunds, SP Discounts, Tax, and Credits — keeps Usage, DiscountedUsage, Fee, SP covered, etc.
   get usageOnlyFilter() {
-    return `AND line_item_line_item_type = 'Usage'`;
+    return `AND line_item_line_item_type NOT IN ('Refund', 'SppDiscount', 'Tax', 'Credit')`;
   }
 
   async getCredentials() {
