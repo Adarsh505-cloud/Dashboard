@@ -106,7 +106,11 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
         costService.getDailyCostData(), costService.getWeeklyCostData(),
         costService.getTopSpendingResources(),
         (accountType === 'master' && !targetAccountId) ? costService.getLinkedAccountsSummary() : Promise.resolve([]),
-        costService.getCarbonFootprint()
+        costService.getCarbonFootprint(),
+        costService.getDashboardSummaryMetrics(),
+        (accountType === 'master' && !targetAccountId) ? costService.getDailyCostByAccount() : Promise.resolve([]),
+        (accountType === 'master' && !targetAccountId) ? costService.getOuMetrics() : Promise.resolve({ ouSummary: [], topServicePerOu: [], dailyOuTrend: [], accountsByOu: [] }),
+        (accountType === 'master' && !targetAccountId) ? costService.getProductCategoryMetrics() : Promise.resolve({ categorySummary: [], topServicePerCategory: [], dailyCategoryTrend: [], servicesByCategory: [] })
       ]);
 
       return {
@@ -122,7 +126,11 @@ router.post('/analysis', validateCredentials, async (req, res, next) => {
         weeklyCostData: results[9] || [],
         topSpendingResources: Array.isArray(results[10]) ? results[10] : [],
         linkedAccountsSummary: results[11] || [],
-        carbonFootprint: results[12] || []
+        carbonFootprint: results[12] || [],
+        dashboardMetrics: results[13] || {},
+        dailyCostByAccount: results[14] || [],
+        ouMetrics: results[15] || { ouSummary: [], topServicePerOu: [], dailyOuTrend: [], accountsByOu: [] },
+        productCategoryMetrics: results[16] || { categorySummary: [], topServicePerCategory: [], dailyCategoryTrend: [], servicesByCategory: [] }
       };
     });
 
