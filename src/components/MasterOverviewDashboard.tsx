@@ -157,11 +157,11 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
   const _ouDonutData = ouSummary.map((o: any) => ({ name: o.ou_name, value: o.total_cost }));
 
   // Build OU stacked chart data
-  const ouNames = [...new Set(dailyOuTrend.map((d: any) => String(d.ou_name)))].slice(0, 8);
-  const ouDates = [...new Set(dailyOuTrend.map((d: any) => String(d.usage_date)))].sort();
-  const ouStackedData = ouDates.map((date) => {
+  const ouNames: string[] = [...new Set(dailyOuTrend.map((d: any) => String(d.ou_name)))].slice(0, 8);
+  const ouDates: string[] = [...new Set(dailyOuTrend.map((d: any) => String(d.usage_date)))].sort();
+  const ouStackedData = ouDates.map((date: string) => {
     const entry: any = { date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
-    ouNames.forEach((ou) => {
+    ouNames.forEach((ou: string) => {
       const match = dailyOuTrend.find((d: any) => d.usage_date === date && d.ou_name === ou);
       entry[ou] = match ? match.daily_cost : 0;
     });
@@ -192,11 +192,11 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
   const totalCatCost = catSummary.reduce((s: number, c: any) => s + (c.total_cost || 0), 0);
 
   // Build category stacked chart data
-  const catNames = [...new Set(dailyCatTrend.map((d: any) => String(d.category_name)))].slice(0, 8);
-  const catDates = [...new Set(dailyCatTrend.map((d: any) => String(d.usage_date)))].sort();
-  const _catStackedData = catDates.map((date) => {
+  const catNames: string[] = [...new Set(dailyCatTrend.map((d: any) => String(d.category_name)))].slice(0, 8);
+  const catDates: string[] = [...new Set(dailyCatTrend.map((d: any) => String(d.usage_date)))].sort();
+  const _catStackedData = catDates.map((date: string) => {
     const entry: any = { date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
-    catNames.forEach((cat) => {
+    catNames.forEach((cat: string) => {
       const match = dailyCatTrend.find((d: any) => d.usage_date === date && d.category_name === cat);
       entry[cat] = match ? match.daily_cost : 0;
     });
