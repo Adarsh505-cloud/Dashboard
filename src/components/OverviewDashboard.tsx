@@ -83,7 +83,8 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
     }],
   };
 
-  const _regionChartData = {
+  /* regionChartData — available if region donut chart is re-enabled
+  const regionChartData = {
     labels: filteredRegionCosts.slice(0, 5).map(item => item.region),
     datasets: [{
       data: filteredRegionCosts.slice(0, 5).map(item => item.cost),
@@ -92,7 +93,7 @@ const OverviewDashboard: React.FC<OverviewDashboardProps> = ({ data, isExporting
       borderWidth: 3,
       hoverBorderWidth: 4,
     }],
-  };
+  }; */
 
   const getCurrentMonthInfo = () => {
     const now = new Date();
