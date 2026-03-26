@@ -22,19 +22,6 @@ const COLORS = [
 
 
 
-const KNOWN_ACCOUNTS: Record<string, { name: string; trend: number }> = {
-  "540331646362": { name: "ERP-Production", trend: 12.3 },
-  "471112980309": { name: "DataPlatform-Prod", trend: -4.1 },
-  "746669225992": { name: "DevOps-Shared", trend: 8.7 },
-  "252078852689": { name: "Master-Payer", trend: 1.2 },
-  "209561933004": { name: "Analytics-Sandbox", trend: -2.3 },
-  "438495148892": { name: "Security-Audit", trend: 5.5 },
-  "183631321229": { name: "ML-Training", trend: 0.8 },
-  "767397989835": { name: "Staging-Env", trend: -1.1 },
-  "533266977246": { name: "DR-Backup", trend: 0.4 },
-  "471112905155": { name: "QA-Testing", trend: -0.2 },
-  "762233734329": { name: "Dev-Playground", trend: 0.1 },
-};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -79,15 +66,12 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
 
   const ACCOUNTS = linkedAccounts.map((a: any) => {
     const accIdStr = String(a.accountId);
-    const known = KNOWN_ACCOUNTS[accIdStr];
-    let resolvedName = `Account ${accIdStr.slice(-4)}`;
-    if (a.accountName && a.accountName !== accIdStr) resolvedName = String(a.accountName);
-    else if (known) resolvedName = known.name;
+    const resolvedName = (a.accountName && a.accountName !== accIdStr) ? String(a.accountName) : `Account ${accIdStr.slice(-4)}`;
 
     return {
       id: accIdStr, name: resolvedName, cost: Number(a.cost || 0),
       pct: totalCost > 0 ? (Number(a.cost || 0) / totalCost) * 100 : 0,
-      trend: known?.trend || 0,
+      trend: 0,
     };
   }).sort((a: any, b: any) => b.cost - a.cost);
 
@@ -127,8 +111,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
   const rawTopResources = data?.topSpendingResources || data?.top_spending_resources || data?.topResources || [];
   const RESOURCES = Array.isArray(rawTopResources) ? rawTopResources.map((r: any) => {
     const accIdStr = String(r.account_id || r.accountId || r.line_item_usage_account_id || 'Unknown');
-    const known = KNOWN_ACCOUNTS[accIdStr];
-    let resolvedName = r.account_name && r.account_name !== accIdStr ? String(r.account_name) : (known ? known.name : 'Member Account');
+    const resolvedName = (r.account_name && r.account_name !== accIdStr) ? String(r.account_name) : `Account ${accIdStr.slice(-4)}`;
 
     return {
       service: r.service || r.serviceName || 'Unknown',
@@ -228,9 +211,9 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
         const topServicePct = metrics.totalSpend > 0 ? ((metrics.topService.cost / metrics.totalSpend) * 100) : 0;
         const topRegionPct = metrics.totalSpend > 0 ? ((metrics.topRegion.cost / metrics.totalSpend) * 100) : 0;
         const topAccountPct = metrics.totalSpend > 0 ? ((metrics.topAccount.cost / metrics.totalSpend) * 100) : 0;
-        const topAccLabel = metrics.topAccount?.label || '';
+        const topAccLabel = String(metrics.topAccount?.label || '');
         const matchedLinked = linkedAccounts.find((a: any) => String(a.accountId) === topAccLabel);
-        const resolvedAccountName = (matchedLinked?.accountName && matchedLinked.accountName !== topAccLabel ? matchedLinked.accountName : null) || KNOWN_ACCOUNTS[topAccLabel]?.name || (topAccLabel ? `Account ${topAccLabel.slice(-4)}` : 'N/A');
+        const resolvedAccountName = (matchedLinked?.accountName && String(matchedLinked.accountName) !== topAccLabel ? String(matchedLinked.accountName) : null) || (topAccLabel ? `Account ${topAccLabel.slice(-4)}` : 'N/A');
         const cardBg = "bg-white dark:bg-gray-900/60 backdrop-blur-sm";
         const cardText = "text-gray-900 dark:text-white";
         const cardSub = "text-gray-500 dark:text-gray-400";
@@ -405,31 +388,56 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
 
       {/* ── Bottom Grid: Donut + Accounts ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+        {/* Cost by Region Donut */}
+        {(() => {
+          const regionCosts = Array.isArray(data?.regionCosts) ? data.regionCosts : [];
+          const REGIONS = regionCosts
+            .filter((r: any) => Number(r.cost || 0) > 0)
+            .map((r: any) => ({ name: String(r.region || 'Unknown'), cost: Number(r.cost || 0) }))
+            .sort((a: any, b: any) => b.cost - a.cost);
+          return (
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 p-4 sm:p-6 flex flex-col md:col-span-1">
           <div className="flex items-center gap-3 mb-4 sm:mb-6">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg shrink-0">
-              <PieChartIcon className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
+            <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg shrink-0">
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div>
-              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Cost by Account</h3>
+              <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-gray-100">Cost by Region</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Regional cost distribution</p>
             </div>
           </div>
-          
-          <div className="relative h-56 mb-4">
-            <ResponsiveContainer width="100%" height="100%">
+
+          <div className="relative h-48 mb-4">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
-                <Pie data={ACCOUNTS} cx="50%" cy="50%" innerRadius={65} outerRadius={95} paddingAngle={2} dataKey="cost" nameKey="id" stroke="none">
-                  {ACCOUNTS.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                <Pie data={REGIONS.slice(0, 8)} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} dataKey="cost" nameKey="name" stroke="none">
+                  {REGIONS.slice(0, 8).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <RechartsTooltip formatter={(value: any, name: any) => { const acc = ACCOUNTS.find((a: any) => a.id === name); return [`$${Number(value || 0).toFixed(2)}`, acc?.name || name]; }} contentStyle={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: "12px", fontSize: "12px", color: "#1e293b", fontWeight: 600, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} itemStyle={{ color: "#475569" }} />
+                <RechartsTooltip formatter={(value: any, name: any) => [`$${Number(value || 0).toFixed(2)}`, name]} contentStyle={{ background: isDark ? "#1f2937" : "#fff", border: `1px solid ${isDark ? "#374151" : "#f1f5f9"}`, borderRadius: "12px", fontSize: "12px", color: isDark ? "#f3f4f6" : "#1e293b", fontWeight: 600, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} itemStyle={{ color: isDark ? "#d1d5db" : "#475569" }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">${totalCost >= 1000 ? (totalCost / 1000).toFixed(1) + 'k' : totalCost.toFixed(0)}</div>
-              <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 tracking-wider mt-0.5">TOTAL</div>
+              <div className="text-xl font-bold text-gray-900 dark:text-gray-100">${totalCost >= 1000 ? (totalCost / 1000).toFixed(1) + 'k' : totalCost.toFixed(0)}</div>
+              <div className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 tracking-wider mt-0.5">TOTAL</div>
             </div>
           </div>
+
+          <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-40">
+            {REGIONS.slice(0, 8).map((r: any, i: number) => {
+              const pct = totalCost > 0 ? (r.cost / totalCost * 100) : 0;
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-sm shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                  <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1">{r.name}</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-14 text-right">${r.cost >= 1000 ? (r.cost / 1000).toFixed(1) + 'k' : r.cost.toFixed(0)}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 w-10 text-right">{pct.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
+          );
+        })()}
 
         {/* Member Accounts Table */}
         <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-lg dark:shadow-gray-900/20 border border-gray-100 dark:border-gray-700 flex flex-col md:col-span-1 lg:col-span-2">
