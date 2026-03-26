@@ -218,10 +218,10 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
         const cardText = "text-gray-900 dark:text-white";
         const cardSub = "text-gray-500 dark:text-gray-400";
         const barBg = "bg-gray-200 dark:bg-gray-700";
-        const cardBase = "rounded-2xl p-4 transition-all shadow-sm dark:shadow-none flex flex-col justify-between min-h-[130px]";
+        const cardBase = "rounded-2xl p-3 sm:p-4 transition-all shadow-sm dark:shadow-none flex flex-col justify-between min-h-[120px] sm:min-h-[130px]";
         const badgeCls = "text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider";
-        const valCls = `text-xl sm:text-2xl font-bold ${cardText} mb-0.5 truncate`;
-        const subCls = `${cardSub} text-[11px]`;
+        const valCls = `text-lg sm:text-xl font-bold ${cardText} mb-0.5 truncate leading-tight`;
+        const subCls = `${cardSub} text-[10px] sm:text-[11px] truncate`;
         const barH = "h-1.5";
         return (
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
@@ -262,7 +262,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
           </div>
           <div>
             <div className={valCls}>${metrics.supportCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            <div className={subCls}>AWS Support Cost ({supportPct.toFixed(1)}%)</div>
+            <div className={subCls}>Support ({supportPct.toFixed(1)}%)</div>
           </div>
           <div className={`w-full ${barBg} rounded-full ${barH} mt-2`}>
             <div className="bg-gradient-to-r from-purple-500 to-purple-400 h-1.5 rounded-full transition-all duration-700" style={{ width: `${Math.max(supportPct, 4)}%` }} />
@@ -291,7 +291,7 @@ export default function MasterOverviewDashboard({ data, onDrillDown }: MasterOve
             <span className={`${badgeCls} bg-cyan-500/20 text-cyan-600 dark:text-cyan-300`}>Top Service</span>
           </div>
           <div>
-            <div className={valCls}>{metrics.topService.label.replace('Amazon ', '').replace('Elastic Compute Cloud', 'EC2')}</div>
+            <div className={valCls}>{metrics.topService.label.replace('Amazon ', '').replace('Elastic Compute Cloud', 'EC2').replace('Savings Plans for AWS ', 'SP: ').replace(' usage', '').replace('Compute', 'Compute')}</div>
             <div className={subCls}>${metrics.topService.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })} ({topServicePct.toFixed(1)}%)</div>
           </div>
           <div className={`w-full ${barBg} rounded-full ${barH} mt-2`}>
