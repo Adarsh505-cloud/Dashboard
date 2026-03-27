@@ -438,11 +438,7 @@ export class CostService {
 
   async getDailyCostData() {
     try {
-      const end = new Date();
-      const start = new Date(); start.setDate(start.getDate() - 30);
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-
+      const { Start: startStr, End: endStr } = this.getEffectiveDateRange(1);
       const sql = `
         SELECT
           date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
@@ -497,11 +493,7 @@ export class CostService {
 
   async getCostTrendData() {
     try {
-      const end = new Date();
-      const start = new Date(); start.setDate(start.getDate() - 30);
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-
+      const { Start: startStr, End: endStr } = this.getEffectiveDateRange(1);
       const sql = `
         SELECT date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
                SUM(CAST(ROUND(COALESCE(line_item_unblended_cost, 0) * 100, 0) AS BIGINT)) AS cost_cents
@@ -518,11 +510,7 @@ export class CostService {
 
   async getDailyCostByAccount() {
     try {
-      const end = new Date();
-      const start = new Date(); start.setDate(start.getDate() - 30);
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-
+      const { Start: startStr, End: endStr } = this.getEffectiveDateRange(1);
       const sql = `
         SELECT date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
                line_item_usage_account_id AS account_id,
@@ -782,6 +770,7 @@ export class CostService {
   }
 
   async getTopSpendingResources() {
+    const { Start: startStr, End: endStr } = this.getEffectiveDateRange(1);
     try {
       const regionExpr = `
         COALESCE(
@@ -808,7 +797,7 @@ export class CostService {
       `;
   
       const whereClause = `
-        WHERE date(line_item_usage_start_date) >= (current_date - interval '30' day)
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}' AND date(line_item_usage_start_date) <= DATE '${endStr}'
           AND (line_item_resource_id IS NOT NULL OR identity_line_item_id IS NOT NULL)
           AND trim(COALESCE(line_item_resource_id, identity_line_item_id, '')) <> ''
           ${this.usageOnlyFilter}
