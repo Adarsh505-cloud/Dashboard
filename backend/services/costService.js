@@ -43,9 +43,9 @@ export class CostService {
     return this.targetAccountId ? ` AND line_item_usage_account_id = '${this.targetAccountId}' ` : '';
   }
 
-  // Excludes Credits, Discounts, Refunds, Taxes, RI/SP fees — shows gross infrastructure cost only
+  // FIXED: Excludes Refunds, SP Discounts, Tax, and Credits — keeps Usage, DiscountedUsage, Fee, SP covered, etc.
   get usageOnlyFilter() {
-    return `AND line_item_line_item_type = 'Usage'`;
+    return `AND line_item_line_item_type NOT IN ('Refund', 'SppDiscount', 'Tax', 'Credit', 'EdpDiscount')`;
   }
 
   async getCredentials() {
@@ -174,10 +174,11 @@ export class CostService {
     return { Start: formatDate(startDate), End: formatDate(endDate) };
   }
 
+  // FIXED: Safer Date Validation
   getEffectiveDateRange(fallbackMonths = 1) {
     if (this.customStartDate && this.customEndDate) {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (dateRegex.test(this.customStartDate) && dateRegex.test(this.customEndDate)) {
+      const isValidDate = (ds) => !isNaN(new Date(ds).getTime()) && /^\d{4}-\d{2}-\d{2}$/.test(ds);
+      if (isValidDate(this.customStartDate) && isValidDate(this.customEndDate)) {
         return { Start: this.customStartDate, End: this.customEndDate };
       }
     }
@@ -303,7 +304,9 @@ export class CostService {
             resultsMap.set(String(r.target_id), { createdDate: r.first_create || null, createdBy: r.sample_creator || null, sampleCreatorIp: r.sample_creator_ip || null });
           });
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`[CostService] Failed to query creation events for chunk:`, err.message);
+      }
     }
     return resultsMap;
   }
@@ -334,9 +337,62 @@ export class CostService {
             resultsMap.set(String(r.target_id), { deletionDate: r.last_delete || null, deletedBy: r.sample_deleter || null, sampleDeleterIp: r.sample_deleter_ip || null });
           });
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`[CostService] Failed to query deletion events for chunk:`, err.message);
+      }
     }
     return resultsMap;
+  }
+
+  // NEW METHOD: 7 Dashboard Cards Metrics running in parallel
+  async getDashboardSummaryMetrics() {
+    try {
+      const { Start, End } = this.getEffectiveDateRange(1);
+
+      // Common where clause to ensure partition scanning is minimized
+      const baseWhere = `WHERE date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}' ${this.targetAccountFilter}`;
+      
+      // Filter excluding refunds/credits for gross footprint queries
+      const usageWhere = `${baseWhere} ${this.usageOnlyFilter}`;
+
+      const queries = {
+        totalSpend: `SELECT SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere}`,
+        activeAccounts: `SELECT COUNT(DISTINCT line_item_usage_account_id) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} AND line_item_unblended_cost > 0`,
+        supportCost: `SELECT SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} AND lower(line_item_product_code) LIKE '%support%'`,
+        marketplaceCost: `SELECT SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} AND bill_billing_entity = 'AWS Marketplace'`,
+        topService: `SELECT COALESCE(element_at(product, 'product_name'), line_item_product_code, 'Unknown') AS label, SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} GROUP BY 1 ORDER BY val DESC LIMIT 1`,
+        topRegion: `SELECT COALESCE(NULLIF(trim(product_region_code), ''), 'Global') AS label, SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} GROUP BY 1 ORDER BY val DESC LIMIT 1`,
+        topAccount: `SELECT line_item_usage_account_id AS label, SUM(line_item_unblended_cost) AS val FROM ${this.athenaDatabase}.${this.athenaCurTable} ${usageWhere} GROUP BY 1 ORDER BY val DESC LIMIT 1`
+      };
+
+      const results = {};
+
+      // Execute all 7 queries concurrently to reduce overall latency
+      await Promise.all(Object.entries(queries).map(async ([key, sql]) => {
+        try {
+          const rows = await this.runAthenaQuery(sql);
+          if (rows && rows.length > 0) {
+            if (rows[0].label !== undefined) {
+              results[key] = {
+                label: rows[0].label,
+                cost: Number(rows[0].val || 0)
+              };
+            } else {
+              results[key] = Number(rows[0].val || 0);
+            }
+          } else {
+            results[key] = sql.includes('label') ? { label: 'N/A', cost: 0 } : 0;
+          }
+        } catch (err) {
+          console.error(`[CostService] Failed to fetch summary metric '${key}':`, err.message);
+          results[key] = sql.includes('label') ? { label: 'Error', cost: 0 } : 0;
+        }
+      }));
+
+      return results;
+    } catch (err) { 
+      throw err; 
+    }
   }
 
   async getLinkedAccountsSummary() {
@@ -460,6 +516,39 @@ export class CostService {
     } catch (err) { throw err; }
   }
 
+  async getDailyCostByAccount() {
+    try {
+      const end = new Date();
+      const start = new Date(); start.setDate(start.getDate() - 30);
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+
+      const sql = `
+        SELECT date_format(line_item_usage_start_date, '%Y-%m-%d') AS day,
+               line_item_usage_account_id AS account_id,
+               MAX(line_item_usage_account_name) AS account_name,
+               SUM(COALESCE(line_item_unblended_cost, 0)) AS total_cost
+        FROM ${this.athenaDatabase}.${this.athenaCurTable}
+        WHERE date(line_item_usage_start_date) >= DATE '${startStr}' AND date(line_item_usage_start_date) <= DATE '${endStr}'
+          ${this.usageOnlyFilter}
+          ${this.targetAccountFilter}
+        GROUP BY 1, 2 ORDER BY day ASC, total_cost DESC;
+      `;
+      const rows = await this.runAthenaQuery(sql);
+      const dayMap = {};
+      rows.forEach(r => {
+        const day = r.day;
+        const name = r.account_name || r.account_id;
+        if (!dayMap[day]) dayMap[day] = {};
+        dayMap[day][name] = (dayMap[day][name] || 0) + Number(r.total_cost || 0);
+      });
+      return Object.keys(dayMap).sort().map(day => ({
+        date: day,
+        accounts: dayMap[day]
+      }));
+    } catch (err) { throw err; }
+  }
+
   async getTotalMonthlyCost() {
     try {
       const { Start, End } = this.getEffectiveDateRange(1);
@@ -552,13 +641,8 @@ export class CostService {
       LIMIT 500
     `;
 
-    console.log(`[getUserCosts] Date range: ${Start} to ${End}`);
-    console.log(`[getUserCosts] SQL:`, sqlPrimary);
-
     try {
       const rows = await this.runAthenaQuery(sqlPrimary);
-      console.log(`[getUserCosts] Returned ${rows.length} users`);
-      if (rows.length > 0) console.log(`[getUserCosts] Sample:`, JSON.stringify(rows[0]));
       return rows.map(r => ({
         user: r.user_name,
         cost: Number(r.total_usd || 0),
@@ -567,9 +651,7 @@ export class CostService {
         resourcesList: r.resources_csv ? r.resources_csv.split(',').filter(Boolean) : []
       }));
     } catch (err) {
-      console.error(`[getUserCosts] Error:`, err.message);
       if (err.message && (err.message.includes('COLUMN_NOT_FOUND') || err.message.includes('TABLE_NOT_FOUND') || err.message.includes('cannot be resolved'))) {
-        console.log(`[getUserCosts] Falling back to untagged query...`);
         const fallbackSql = `
           SELECT
             'Unknown' AS user_name,
@@ -789,7 +871,6 @@ export class CostService {
     } catch (err) { return []; }
   }
 
-  // FIXED: Added getCarbonFootprint to fetch directly from the new carbon_model table
   async getCarbonFootprint() {
     try {
       const sql = `
@@ -811,7 +892,7 @@ export class CostService {
       }));
     } catch (err) {
       console.warn(`[costService] Carbon Footprint table might not exist yet or failed: ${err.message}`);
-      return []; // Return empty array so the main dashboard doesn't crash if the table is missing
+      return []; 
     }
   }
 
@@ -826,6 +907,200 @@ export class CostService {
       'AWS Backup': 'backup:backup-vault', 'Amazon Simple Queue Service': 'sqs:queue', 'AWS Lambda': 'lambda:function', 'AWS Storage Gateway': 'storagegateway:gateway',
     };
     return serviceToResourceType[serviceName] || null;
+  }
+
+  async getOuMetrics() {
+    const { Start, End } = this.getEffectiveDateRange(1);
+    const db = this.athenaDatabase;
+    const tbl = this.athenaCurTable;
+    const dateFilter = `date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'`;
+    const filters = `${this.usageOnlyFilter}`;
+
+    const ouSummarySql = `
+      SELECT
+        COALESCE(element_at(cost_category, 'a_w_s_organization'), 'Uncategorized') AS ou_name,
+        COUNT(DISTINCT line_item_usage_account_id) AS account_count,
+        ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS total_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1
+      HAVING SUM(COALESCE(line_item_unblended_cost, 0)) > 0
+      ORDER BY total_cost DESC;
+    `;
+
+    const topServiceSql = `
+      WITH RankedServices AS (
+        SELECT
+          COALESCE(element_at(cost_category, 'a_w_s_organization'), 'Uncategorized') AS ou_name,
+          COALESCE(MAX(element_at(product, 'product_name')), line_item_product_code) AS service_name,
+          SUM(line_item_unblended_cost) AS service_cost,
+          ROW_NUMBER() OVER(
+            PARTITION BY COALESCE(element_at(cost_category, 'a_w_s_organization'), 'Uncategorized')
+            ORDER BY SUM(line_item_unblended_cost) DESC
+          ) AS rank
+        FROM ${db}.${tbl}
+        WHERE ${dateFilter} ${filters}
+        GROUP BY 1, line_item_product_code
+      )
+      SELECT ou_name, service_name AS top_service, ROUND(service_cost, 2) AS service_cost
+      FROM RankedServices WHERE rank = 1 ORDER BY service_cost DESC;
+    `;
+
+    const dailyTrendSql = `
+      SELECT
+        date_format(line_item_usage_start_date, '%Y-%m-%d') AS usage_date,
+        COALESCE(element_at(cost_category, 'a_w_s_organization'), 'Uncategorized') AS ou_name,
+        ROUND(SUM(line_item_unblended_cost), 2) AS daily_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1, 2
+      ORDER BY usage_date ASC, daily_cost DESC;
+    `;
+
+    const accountsByOuSql = `
+      SELECT
+        COALESCE(element_at(cost_category, 'a_w_s_organization'), 'Uncategorized') AS ou_name,
+        line_item_usage_account_id AS account_id,
+        MAX(line_item_usage_account_name) AS account_name,
+        ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS account_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1, 2
+      HAVING SUM(COALESCE(line_item_unblended_cost, 0)) > 0
+      ORDER BY ou_name, account_cost DESC;
+    `;
+
+    try {
+      const [ouSummary, topServicePerOu, dailyOuTrend, accountsByOu] = await Promise.all([
+        this.runAthenaQuery(ouSummarySql),
+        this.runAthenaQuery(topServiceSql),
+        this.runAthenaQuery(dailyTrendSql),
+        this.runAthenaQuery(accountsByOuSql)
+      ]);
+
+      return {
+        ouSummary: (ouSummary || []).map(r => ({
+          ou_name: r.ou_name || 'Uncategorized',
+          account_count: Number(r.account_count || 0),
+          total_cost: Number(r.total_cost || 0)
+        })),
+        topServicePerOu: (topServicePerOu || []).map(r => ({
+          ou_name: r.ou_name || 'Uncategorized',
+          top_service: r.top_service || 'Unknown',
+          service_cost: Number(r.service_cost || 0)
+        })),
+        dailyOuTrend: (dailyOuTrend || []).map(r => ({
+          usage_date: r.usage_date,
+          ou_name: r.ou_name || 'Uncategorized',
+          daily_cost: Number(r.daily_cost || 0)
+        })),
+        accountsByOu: (accountsByOu || []).map(r => ({
+          ou_name: r.ou_name || 'Uncategorized',
+          account_id: String(r.account_id || '').trim(),
+          account_name: r.account_name || r.account_id,
+          account_cost: Number(r.account_cost || 0)
+        }))
+      };
+    } catch (err) {
+      console.error('[costService] getOuMetrics error:', err.message);
+      return { ouSummary: [], topServicePerOu: [], dailyOuTrend: [], accountsByOu: [] };
+    }
+  }
+
+  async getProductCategoryMetrics() {
+    const { Start, End } = this.getEffectiveDateRange(1);
+    const db = this.athenaDatabase;
+    const tbl = this.athenaCurTable;
+    const dateFilter = `date(line_item_usage_start_date) >= DATE '${Start}' AND date(line_item_usage_start_date) <= DATE '${End}'`;
+    const filters = `${this.usageOnlyFilter}`;
+
+    const categorySummarySql = `
+      SELECT
+        COALESCE(element_at(cost_category, 'product_category'), 'Uncategorized') AS category_name,
+        COUNT(DISTINCT line_item_usage_account_id) AS service_count,
+        ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS total_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1
+      HAVING SUM(COALESCE(line_item_unblended_cost, 0)) > 0
+      ORDER BY total_cost DESC;
+    `;
+
+    const topServiceSql = `
+      WITH RankedServices AS (
+        SELECT
+          COALESCE(element_at(cost_category, 'product_category'), 'Uncategorized') AS category_name,
+          COALESCE(MAX(element_at(product, 'product_name')), line_item_product_code) AS service_name,
+          SUM(line_item_unblended_cost) AS service_cost,
+          ROW_NUMBER() OVER(
+            PARTITION BY COALESCE(element_at(cost_category, 'product_category'), 'Uncategorized')
+            ORDER BY SUM(line_item_unblended_cost) DESC
+          ) AS rank
+        FROM ${db}.${tbl}
+        WHERE ${dateFilter} ${filters}
+        GROUP BY 1, line_item_product_code
+      )
+      SELECT category_name, service_name AS top_service, ROUND(service_cost, 2) AS service_cost
+      FROM RankedServices WHERE rank = 1 ORDER BY service_cost DESC;
+    `;
+
+    const dailyTrendSql = `
+      SELECT
+        date_format(line_item_usage_start_date, '%Y-%m-%d') AS usage_date,
+        COALESCE(element_at(cost_category, 'product_category'), 'Uncategorized') AS category_name,
+        ROUND(SUM(line_item_unblended_cost), 2) AS daily_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1, 2
+      ORDER BY usage_date ASC, daily_cost DESC;
+    `;
+
+    const servicesByCategorySql = `
+      SELECT
+        COALESCE(element_at(cost_category, 'product_category'), 'Uncategorized') AS category_name,
+        COALESCE(MAX(element_at(product, 'product_name')), line_item_product_code) AS service_name,
+        ROUND(SUM(COALESCE(line_item_unblended_cost, 0)), 2) AS service_cost
+      FROM ${db}.${tbl}
+      WHERE ${dateFilter} ${filters}
+      GROUP BY 1, line_item_product_code
+      HAVING SUM(COALESCE(line_item_unblended_cost, 0)) > 0
+      ORDER BY category_name, service_cost DESC;
+    `;
+
+    try {
+      const [catSummary, topServicePerCat, dailyCatTrend, servicesByCat] = await Promise.all([
+        this.runAthenaQuery(categorySummarySql),
+        this.runAthenaQuery(topServiceSql),
+        this.runAthenaQuery(dailyTrendSql),
+        this.runAthenaQuery(servicesByCategorySql)
+      ]);
+
+      return {
+        categorySummary: (catSummary || []).map(r => ({
+          category_name: r.category_name || 'Uncategorized',
+          service_count: Number(r.service_count || 0),
+          total_cost: Number(r.total_cost || 0)
+        })),
+        topServicePerCategory: (topServicePerCat || []).map(r => ({
+          category_name: r.category_name || 'Uncategorized',
+          top_service: r.top_service || 'Unknown',
+          service_cost: Number(r.service_cost || 0)
+        })),
+        dailyCategoryTrend: (dailyCatTrend || []).map(r => ({
+          usage_date: r.usage_date,
+          category_name: r.category_name || 'Uncategorized',
+          daily_cost: Number(r.daily_cost || 0)
+        })),
+        servicesByCategory: (servicesByCat || []).map(r => ({
+          category_name: r.category_name || 'Uncategorized',
+          service_name: r.service_name || 'Unknown',
+          service_cost: Number(r.service_cost || 0)
+        }))
+      };
+    } catch (err) {
+      console.error('[costService] getProductCategoryMetrics error:', err.message);
+      return { categorySummary: [], topServicePerCategory: [], dailyCategoryTrend: [], servicesByCategory: [] };
+    }
   }
 }
 

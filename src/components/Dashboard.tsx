@@ -336,7 +336,7 @@ const Dashboard: React.FC<DashboardProps> = ({ credentials, onBack }) => {
     undefined;
 
   return (
-    <div className="min-h-screen p-3 sm:p-4 lg:p-8 dark:bg-gray-950">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-8 bg-gray-50 dark:bg-gray-950">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col gap-3 mb-4 sm:mb-6 lg:mb-8">
